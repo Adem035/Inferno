@@ -7,6 +7,12 @@ Core functionality including:
 - Network Manager for global rate limiting and proxy coordination
 - Branch tracking with response pattern detection
 - Guardrails for security policies
+- Intelligent Exploitation Engine (NEW):
+  - HintExtractor: Extract hints from responses
+  - ResponseAnalyzer: WAF/filter detection
+  - DifferentialAnalyzer: Blind injection detection
+  - PayloadMutator: Auto-bypass generation
+  - AttackSelector: Technology-to-attack mapping
 
 NOTE: Simplified in rebuild.
 - CDN/Geo detection, credential manager, response cache removed
@@ -46,6 +52,44 @@ from inferno.core.branch_tracker import (
     ExplorationResult,
     ResponsePatternTracker,
 )
+# Intelligent Exploitation Engine
+from inferno.core.hint_extractor import (
+    Hint,
+    HintExtractor,
+    HintPriority,
+    HintType,
+    get_hint_extractor,
+)
+from inferno.core.response_analyzer import (
+    BlockAnalysis,
+    BlockType,
+    ResponseAnalyzer,
+    WAFType,
+    get_response_analyzer,
+)
+from inferno.core.differential_analyzer import (
+    Difference,
+    DifferenceType,
+    DifferentialAnalyzer,
+    DifferentialResult,
+    ResponseFingerprint,
+    VulnerabilityIndicator,
+    get_differential_analyzer,
+)
+from inferno.core.payload_mutator import (
+    Mutation,
+    MutationResult,
+    MutationType,
+    PayloadMutator,
+    get_payload_mutator,
+)
+from inferno.core.attack_selector import (
+    AttackCategory,
+    AttackPlan,
+    AttackSelector,
+    AttackVector,
+    get_attack_selector,
+)
 
 __all__ = [
     # Scope Management
@@ -76,4 +120,32 @@ __all__ = [
     "BranchOption",
     "ExplorationResult",
     "ResponsePatternTracker",
+    # Intelligent Exploitation Engine
+    "Hint",
+    "HintExtractor",
+    "HintPriority",
+    "HintType",
+    "get_hint_extractor",
+    "BlockAnalysis",
+    "BlockType",
+    "ResponseAnalyzer",
+    "WAFType",
+    "get_response_analyzer",
+    "Difference",
+    "DifferenceType",
+    "DifferentialAnalyzer",
+    "DifferentialResult",
+    "ResponseFingerprint",
+    "VulnerabilityIndicator",
+    "get_differential_analyzer",
+    "Mutation",
+    "MutationResult",
+    "MutationType",
+    "PayloadMutator",
+    "get_payload_mutator",
+    "AttackCategory",
+    "AttackPlan",
+    "AttackSelector",
+    "AttackVector",
+    "get_attack_selector",
 ]

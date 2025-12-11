@@ -38,6 +38,7 @@ from inferno.quality.gates.escalation import EscalationGate
 from inferno.quality.gates.severity import SeverityGate
 from inferno.quality.gates.so_what import SoWhatGate
 from inferno.quality.gates.technology import TechnologyContextGate
+from inferno.quality.gates.validation import ValidationGate, create_validation_gate
 
 __all__ = [
     "SoWhatGate",
@@ -45,4 +46,6 @@ __all__ = [
     "EscalationGate",
     "SeverityGate",
     "PreReportChecklistGate",
+    "ValidationGate",
+    "create_validation_gate",
 ]

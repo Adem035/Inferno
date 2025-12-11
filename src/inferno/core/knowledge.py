@@ -41,6 +41,9 @@ class KnowledgeType(str, Enum):
     HYPOTHESIS = "hypothesis"  # Unconfirmed suspicion
     EVIDENCE = "evidence"  # Proof/screenshot/response
     RELATIONSHIP = "relationship"  # Connection between entities
+    HINT = "hint"  # Extracted hint from response/content
+    BYPASS = "bypass"  # Successful bypass technique
+    BASELINE = "baseline"  # Response baseline for differential analysis
 
 
 class Severity(str, Enum):
