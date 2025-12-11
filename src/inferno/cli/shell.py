@@ -1065,7 +1065,7 @@ class InfernoShell:
 
             # Display results
             console.print()
-            final_output = result.final_output if result.final_output else "Assessment completed"
+            final_output = result.final_message if result.final_message else "Assessment completed"
 
             if self.full_output:
                 display_output = str(final_output)
