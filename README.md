@@ -531,6 +531,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
+### Special Thanks
+
+This project stands on the shoulders of giants. Huge credits to the pioneering work that made Inferno possible:
+
+| Project | Contribution |
+|---------|--------------|
+| **[CAI (Cybersecurity AI)](https://github.com/aliasrobotics/CAI)** | The foundational research and methodology for AI-powered security testing. CAI's approach to autonomous pentesting directly inspired Inferno's architecture. |
+| **[Cyber-autoagent](https://github.com/chatsecure/cyber-autoagent)** | Groundbreaking work on agent-based security automation and multi-step exploitation chains. |
+| **[Strix](https://github.com/strix-security/strix)** | Innovative techniques for LLM-driven vulnerability discovery and security reasoning. |
+
+These projects demonstrated that AI agents could think like security researchers - Inferno builds on their vision.
+
+### Also Thanks To
+
 - [Anthropic](https://anthropic.com) - Claude AI
 - [Qdrant](https://qdrant.tech) - Vector search engine
 - [Mem0](https://mem0.ai) - Memory layer
