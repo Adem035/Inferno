@@ -307,7 +307,7 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
             # Import Claude SDK
             from claude_agent_sdk import (
                 ClaudeSDKClient,
-                ClaudeAgentOptions,
+                ClaudeCodeOptions,
                 AssistantMessage,
                 TextBlock,
                 ToolUseBlock,
@@ -354,7 +354,7 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
                 return PermissionResultAllow()
 
             # Configure SDK options for subagent
-            options = ClaudeAgentOptions(
+            options = ClaudeCodeOptions(
                 max_turns=config.max_turns,
                 system_prompt=system_prompt,
                 permission_mode="bypassPermissions",

@@ -923,7 +923,7 @@ def create_inferno_mcp_server():
     - Swarm/meta-tool registration
 
     Returns:
-        McpSdkServerConfig for use with ClaudeAgentOptions.
+        McpSdkServerConfig for use with ClaudeCodeOptions.
     """
     # Reset metrics for new session
     reset_metrics()

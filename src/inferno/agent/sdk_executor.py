@@ -23,7 +23,7 @@ import structlog
 
 from claude_agent_sdk import (
     ClaudeSDKClient,
-    ClaudeAgentOptions,
+    ClaudeCodeOptions,
     AssistantMessage,
     TextBlock,
     ToolUseBlock,
@@ -1380,7 +1380,7 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
             return PermissionResultAllow()
 
         # Configure SDK options
-        options = ClaudeAgentOptions(
+        options = ClaudeCodeOptions(
             max_turns=config.max_turns,
             system_prompt=system_prompt,
             permission_mode=config.permission_mode,
@@ -2241,7 +2241,7 @@ Continue the assessment now. Start by recalling memories.""")
         Returns:
             Agent's response as a string.
         """
-        from claude_code_sdk import ClaudeSDKClient, ClaudeAgentOptions
+        from claude_code_sdk import ClaudeSDKClient, ClaudeCodeOptions
         from claude_code_sdk.types import (
             AssistantMessage,
             TextBlock,
@@ -2279,7 +2279,7 @@ Respond helpfully while maintaining security assessment context."""
         from inferno.agent.mcp_tools import create_inferno_mcp_server
         inferno_mcp = create_inferno_mcp_server()
 
-        options = ClaudeAgentOptions(
+        options = ClaudeCodeOptions(
             max_turns=50,  # Limited turns for chat
             system_prompt=system_prompt or self._build_chat_system_prompt(config),
             permission_mode="default",
@@ -2593,7 +2593,7 @@ class MinimalSDKExecutor:
             return PermissionResultAllow()
 
         # Configure SDK options with minimal settings
-        options = ClaudeAgentOptions(
+        options = ClaudeCodeOptions(
             max_turns=config.max_turns,
             system_prompt=system_prompt,
             permission_mode="bypassPermissions",
