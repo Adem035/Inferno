@@ -49,6 +49,14 @@ except ImportError:
 # Branch tracker (kept - unique, useful feature)
 from inferno.core.branch_tracker import BranchTracker, BranchStatus, DecisionType
 
+# Session trace for user visibility
+from inferno.observability.session_trace import (
+    SessionTrace,
+    init_session_trace,
+    end_session_trace,
+    get_session_trace,
+)
+
 # System prompt builder (kept)
 from inferno.agent.prompts import SystemPromptBuilder
 from inferno.prompts import AgentPersona
@@ -121,6 +129,8 @@ class ExecutionResult:
     final_message: str | None = None
     continuations: int = 0
     flags_found: list[str] = field(default_factory=list)  # CTF mode
+    trace_json_path: str | None = None  # Path to session trace JSON
+    trace_html_path: str | None = None  # Path to session trace HTML
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -141,6 +151,8 @@ class ExecutionResult:
             "final_message": self.final_message,
             "continuations": self.continuations,
             "flags_found": self.flags_found,
+            "trace_json_path": self.trace_json_path,
+            "trace_html_path": self.trace_html_path,
         }
 
 
@@ -203,6 +215,10 @@ class AssessmentConfig:
     # Strategic planning features (NEW)
     enable_strategic_planning: bool = True  # Enable strategic planning phase
     strategic_budget_allocation: dict[str, float] | None = None  # Custom budget allocation per phase
+
+    # Session trace for visibility into what Inferno does
+    enable_session_trace: bool = True  # Enable detailed session trace logging
+    session_trace_output_dir: Path | None = None  # Custom output dir for traces
 
 
 class SDKAgentExecutor:
@@ -320,6 +336,9 @@ class SDKAgentExecutor:
         # CAI-inspired: Context compaction tracking
         self._compaction_threshold: int = 50  # Trigger compaction after this many turns
         self._last_compaction_turn: int = 0
+
+        # Session trace for user visibility
+        self._session_trace: SessionTrace | None = None
 
     def on_message(self, callback: Callable[[str], None]) -> SDKAgentExecutor:
         """Set callback for assistant messages."""
@@ -1151,6 +1170,17 @@ The system automatically monitors progress and can suggest when to try different
             persona=config.persona,
         )
 
+        # Initialize session trace for user visibility
+        if config.enable_session_trace:
+            trace_dir = config.session_trace_output_dir or artifacts_dir
+            self._session_trace = init_session_trace(
+                target=config.target,
+                objective=config.objective,
+                operation_id=operation_id,
+                output_dir=trace_dir,
+            )
+            logger.info("session_trace_initialized", output_dir=str(trace_dir))
+
         # Initialize advanced features
         if config.enable_branch_tracking:
             self._branch_tracker = BranchTracker(
@@ -1501,6 +1531,10 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                             elif thinking_only_output and self._on_message:
                                 self._on_message(f"[THINKING]\n{block.thinking}\n[/THINKING]")
 
+                            # Session trace: log thinking
+                            if self._session_trace and block.thinking:
+                                self._session_trace.log_thinking(block.thinking[:1000])
+
                         elif isinstance(block, ToolUseBlock):
                             # Track tool call for result matching
                             pending_tools[block.id] = block.name
@@ -1526,6 +1560,13 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                             if self._on_tool_call:
                                 self._on_tool_call(block.name, block.input)
 
+                            # Session trace: log tool call
+                            if self._session_trace:
+                                self._session_trace.log_tool_call(
+                                    block.name,
+                                    block.input if isinstance(block.input, dict) else {"input": str(block.input)}
+                                )
+
                             # Check for finding via store_evidence (explicit vulnerability storage)
                             if block.name in ("store_evidence", "mcp__inferno__store_evidence"):
                                 inp = block.input
@@ -1539,6 +1580,15 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                                     # Fire finding callback
                                     if self._on_finding:
                                         self._on_finding(title, severity, endpoint)
+
+                                    # Session trace: log finding
+                                    if self._session_trace:
+                                        self._session_trace.log_finding(
+                                            vuln_type=vuln_type,
+                                            severity=severity,
+                                            endpoint=endpoint,
+                                            evidence=evidence[:500] if evidence else None,
+                                        )
 
                                     # Track for progress monitoring
                                     self._findings_count += 1
@@ -1970,6 +2020,23 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
 
         if self._on_complete:
             self._on_complete(result)
+
+        # End and save session trace
+        if self._session_trace:
+            self._session_trace.end_session(
+                summary=f"Objective {'met' if objective_met else 'not met'}. "
+                        f"Found {self._findings_count} findings in {turns} turns."
+            )
+            json_path = self._session_trace.save_json()
+            html_path = self._session_trace.save_html()
+            logger.info(
+                "session_trace_saved",
+                json_path=str(json_path),
+                html_path=str(html_path),
+            )
+            # Add trace paths to result for user reference
+            result.trace_json_path = str(json_path)
+            result.trace_html_path = str(html_path)
 
         # Cleanup temp files
         self._cleanup_temp_files()

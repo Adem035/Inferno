@@ -2,15 +2,28 @@
 Inferno Observability Package.
 
 This module exports observability components for metrics,
-tracing, and logging.
+cost tracking, and session tracing.
 """
 
 from inferno.observability.metrics import MetricsCollector, OperationMetrics
-from inferno.observability.tracing import Tracer, Span
+from inferno.observability.session_trace import (
+    SessionTrace,
+    TraceEvent,
+    EventType,
+    get_session_trace,
+    init_session_trace,
+    end_session_trace,
+)
 
 __all__ = [
+    # Metrics
     "MetricsCollector",
     "OperationMetrics",
-    "Tracer",
-    "Span",
+    # Session Trace
+    "SessionTrace",
+    "TraceEvent",
+    "EventType",
+    "get_session_trace",
+    "init_session_trace",
+    "end_session_trace",
 ]
