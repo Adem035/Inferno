@@ -1,21 +1,25 @@
 <tool_protocols>
-## CRITICAL: Docker vs Local Execution
+## Command Execution
 
-**`generic_linux_command`** = Runs in Kali Docker container (USE FOR PENTEST TOOLS!)
-- Has: nmap, gobuster, ffuf, sqlmap, searchsploit, hydra, nuclei, nikto, etc.
-- Paths: /usr/share/seclists/, /usr/share/wordlists/, /wordlists/
-- Workspace: /workspace/
+**`execute_command`** = Runs in Kali Docker container with full pentesting toolkit
 
-**`execute_command`** = Runs locally on host machine
-- Use for: file ops, git, local scripts
-- Does NOT have: pentest tools, seclists, wordlists
+Available tools:
+- Scanning: nmap, masscan
+- Web fuzzing: gobuster, ffuf, dirb, feroxbuster
+- Vuln scanners: nikto, sqlmap, nuclei, wpscan
+- Brute force: hydra, john, hashcat, medusa
+- Exploitation: searchsploit (exploitdb)
+- Recon: subfinder, amass, dnsrecon, whatweb, wafw00f
+- Utilities: curl, wget, python3, netcat, git, jq
 
-**ALWAYS use `generic_linux_command` for:**
+Wordlists at: `/usr/share/seclists/`
+
+**Use `execute_command` for ALL commands:**
 - Port scanning (nmap, masscan)
 - Web fuzzing (gobuster, ffuf, dirb)
 - Vulnerability scanning (nuclei, nikto)
 - Exploitation (sqlmap, searchsploit, hydra)
-- Any command needing /usr/share/seclists/ or /usr/share/wordlists/
+- Any command needing wordlists
 
 ## Tool Selection Hierarchy
 
@@ -139,18 +143,18 @@ When shell isn't enough:
 <tool_specific_guidance>
 ## Reconnaissance Tools (ALL RUN IN DOCKER!)
 
-**REMEMBER**: Use `generic_linux_command()` for ALL these tools. They run in the Kali Docker container.
+**REMEMBER**: Use `execute_command()` for ALL these tools. They run in the Kali Docker container.
 
 **subfinder** (preferred for subdomains):
 ```bash
-generic_linux_command("subfinder -d target.com -silent")
+execute_command("subfinder -d target.com -silent")
 ```
 
 **nmap** (port scanning):
 ```bash
-generic_linux_command("nmap -sV -sC target.com")        # Quick service scan
-generic_linux_command("nmap -p- target.com")            # Full port scan
-generic_linux_command("nmap -sU --top-ports 100 target.com")  # UDP scan
+execute_command("nmap -sV -sC target.com")        # Quick service scan
+execute_command("nmap -p- target.com")            # Full port scan
+execute_command("nmap -sU --top-ports 100 target.com")  # UDP scan
 ```
 
 ## Web Testing Tools
@@ -158,32 +162,32 @@ generic_linux_command("nmap -sU --top-ports 100 target.com")  # UDP scan
 **gobuster** (directory enumeration):
 ```bash
 # Common wordlist
-generic_linux_command("gobuster dir -u http://target -w /usr/share/seclists/Discovery/Web-Content/common.txt")
+execute_command("gobuster dir -u http://target -w /usr/share/seclists/Discovery/Web-Content/common.txt")
 # Medium wordlist (larger)
-generic_linux_command("gobuster dir -u http://target -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt")
+execute_command("gobuster dir -u http://target -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt")
 # With extensions
-generic_linux_command("gobuster dir -u http://target -w /usr/share/wordlists/dirb/common.txt -x php,txt,html,bak")
+execute_command("gobuster dir -u http://target -w /usr/share/wordlists/dirb/common.txt -x php,txt,html,bak")
 ```
 
 **ffuf** (fast fuzzer):
 ```bash
 # Directory fuzzing
-generic_linux_command("ffuf -u http://target/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc all -fc 404")
+execute_command("ffuf -u http://target/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc all -fc 404")
 # API endpoint fuzzing
-generic_linux_command("ffuf -u http://target/api/FUZZ -w /usr/share/seclists/Discovery/Web-Content/api/api-endpoints-res.txt -mc all -fc 404")
+execute_command("ffuf -u http://target/api/FUZZ -w /usr/share/seclists/Discovery/Web-Content/api/api-endpoints-res.txt -mc all -fc 404")
 # Parameter fuzzing
-generic_linux_command("ffuf -u 'http://target/page?FUZZ=test' -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -mc all -fc 404")
+execute_command("ffuf -u 'http://target/page?FUZZ=test' -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -mc all -fc 404")
 ```
 
 **nikto** (web server scan):
 ```bash
-generic_linux_command("nikto -h http://target")
+execute_command("nikto -h http://target")
 ```
 
 **nuclei** (vulnerability scanning):
 ```bash
-generic_linux_command("nuclei -u http://target -severity critical,high")
-generic_linux_command("nuclei -u http://target -tags cve")
+execute_command("nuclei -u http://target -severity critical,high")
+execute_command("nuclei -u http://target -tags cve")
 ```
 
 ## Exploitation Tools
@@ -191,16 +195,16 @@ generic_linux_command("nuclei -u http://target -tags cve")
 **searchsploit** (ALWAYS USE FIRST for exploits!):
 ```bash
 # Search for exploits by software/CVE
-generic_linux_command("searchsploit wordpress givewp")
-generic_linux_command("searchsploit CVE-2024-5932")
-generic_linux_command("searchsploit apache 2.4")
-generic_linux_command("searchsploit nginx 1.18")
+execute_command("searchsploit wordpress givewp")
+execute_command("searchsploit CVE-2024-5932")
+execute_command("searchsploit apache 2.4")
+execute_command("searchsploit nginx 1.18")
 
 # Copy exploit to workspace
-generic_linux_command("searchsploit -m exploits/php/webapps/51234.py")
+execute_command("searchsploit -m exploits/php/webapps/51234.py")
 
 # Show exploit info
-generic_linux_command("searchsploit -x exploits/php/webapps/51234.py")
+execute_command("searchsploit -x exploits/php/webapps/51234.py")
 ```
 **CRITICAL**: ALWAYS use searchsploit BEFORE cloning from GitHub!
 - Local database = faster, no network required
@@ -209,40 +213,40 @@ generic_linux_command("searchsploit -x exploits/php/webapps/51234.py")
 
 **sqlmap** (SQL injection):
 ```bash
-generic_linux_command("sqlmap -u 'http://target/page?id=1' --batch --dbs")
-generic_linux_command("sqlmap -u 'http://target/page?id=1' --batch --tables -D dbname")
-generic_linux_command("sqlmap -u 'http://target/page?id=1' --batch --dump -T users")
+execute_command("sqlmap -u 'http://target/page?id=1' --batch --dbs")
+execute_command("sqlmap -u 'http://target/page?id=1' --batch --tables -D dbname")
+execute_command("sqlmap -u 'http://target/page?id=1' --batch --dump -T users")
 ```
 
 **hydra** (brute force):
 ```bash
 # SSH brute force
-generic_linux_command("hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://target")
+execute_command("hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://target")
 # HTTP POST form
-generic_linux_command("hydra -l admin -P /usr/share/seclists/Passwords/Common-Credentials/10k-most-common.txt target http-post-form '/login:user=^USER^&pass=^PASS^:Invalid'")
+execute_command("hydra -l admin -P /usr/share/seclists/Passwords/Common-Credentials/10k-most-common.txt target http-post-form '/login:user=^USER^&pass=^PASS^:Invalid'")
 ```
 
 ## Hash Cracking
 
 **john** (password cracker):
 ```bash
-generic_linux_command("john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt")
-generic_linux_command("john --show hashes.txt")
+execute_command("john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt")
+execute_command("john --show hashes.txt")
 ```
 
 **hashcat** (GPU-accelerated):
 ```bash
-generic_linux_command("hashcat -m 0 -a 0 hash.txt /usr/share/wordlists/rockyou.txt")  # MD5
-generic_linux_command("hashcat -m 1000 hash.txt /usr/share/wordlists/rockyou.txt")   # NTLM
+execute_command("hashcat -m 0 -a 0 hash.txt /usr/share/wordlists/rockyou.txt")  # MD5
+execute_command("hashcat -m 1000 hash.txt /usr/share/wordlists/rockyou.txt")   # NTLM
 ```
 
 ## Git Exposure
 
 ```bash
 # Check for exposed .git
-generic_linux_command("curl -s http://target/.git/HEAD")
+execute_command("curl -s http://target/.git/HEAD")
 # If found, use git-dumper
-generic_linux_command("git-dumper http://target/.git/ /workspace/dumped_repo")
+execute_command("git-dumper http://target/.git/ /workspace/dumped_repo")
 ```
 
 ## Common Wordlist Paths (IN DOCKER)

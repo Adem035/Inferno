@@ -1410,6 +1410,8 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
             return PermissionResultAllow()
 
         # Configure SDK options
+        # IMPORTANT: Disable native Bash tool - all commands must go through
+        # execute_command which runs in Docker/Kali container
         options = ClaudeAgentOptions(
             max_turns=config.max_turns,
             system_prompt=system_prompt,
@@ -1417,6 +1419,7 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
             cwd=str(config.working_dir or artifacts_dir),
             mcp_servers={"inferno": inferno_mcp},
             can_use_tool=auto_approve_tools,
+            disallowed_tools=["Bash"],  # Force use of execute_command (Docker)
         )
 
         if config.model:
