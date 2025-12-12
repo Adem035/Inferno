@@ -93,16 +93,17 @@ inferno shell
 
 ### 2. Minimalist Tool Architecture
 
-**4 tools instead of 81.** The LLM already knows security tools - we just let it run commands.
+**5 tools instead of 81.** The LLM already knows security tools - we just let it run commands.
 
 ```mermaid
 flowchart LR
-    subgraph Core["THE 4 CORE TOOLS"]
+    subgraph Core["THE 5 CORE TOOLS"]
         direction TB
         EXEC["⚡ execute_command<br/>(Primary Tool)"]
         HTTP["🌐 http_request<br/>Auth • Proxies • Sessions"]
         MEM["🧠 memory<br/>Store • Recall • Learn"]
         THINK["💭 think<br/>Structured Reasoning"]
+        SWARM["🐝 swarm<br/>Spawn Sub-Agents"]
     end
 
     subgraph Commands["The Agent Decides What to Run"]
@@ -118,56 +119,54 @@ flowchart LR
 
 **Why this works:** Claude already knows nmap, sqlmap, gobuster, hydra, and hundreds of other tools. Forcing it to select from 81 specialized wrappers creates cognitive overhead. Just let it run the command it wants.
 
-### 3. Multi-Agent Swarm Architecture
+### 3. Meta Agent with Swarm-on-Demand
 
-Coordinated specialists work in parallel, communicating via shared memory:
+The **Meta Agent** does the work directly, and spawns specialized sub-agents when it needs help:
 
 ```mermaid
 flowchart TB
-    subgraph Coordinator["META COORDINATOR"]
-        MC[/"Plans • Spawns • Validates • Synthesizes<br/>NEVER executes commands"/]
+    subgraph MetaAgent["META AGENT (Main)"]
+        MA["🧠 Autonomous Agent<br/>Reasons • Plans • Executes"]
+        TOOLS["4 Core Tools<br/>execute_command • http_request<br/>memory • think"]
+        SWARM["🐝 swarm tool<br/>Spawn specialists on demand"]
     end
 
-    subgraph Phase1["Phase 1: Discovery"]
-        RECON["🔍 RECON<br/>Subdomains • Ports<br/>Tech Detection"]
-        SCANNER["🎯 SCANNER<br/>Nuclei • CVEs<br/>Misconfigs"]
-    end
-
-    subgraph Phase2["Phase 2: Attack"]
-        EXPLOITER["💥 EXPLOITER<br/>SQLMap • XSS<br/>Auth Bypass"]
-        WAF["🛡️ WAF BYPASS<br/>Encoding • HPP<br/>Smuggling"]
-    end
-
-    subgraph Phase3["Phase 3: Validate & Report"]
-        VALIDATOR["✅ VALIDATOR<br/>Confirm PoCs<br/>Filter FPs"]
-        REPORTER["📝 REPORTER<br/>Bug Bounty<br/>Executive"]
+    subgraph Workers["SPAWNED SUB-AGENTS (On Demand)"]
+        direction LR
+        W1["🔍 Recon"]
+        W2["🎯 Scanner"]
+        W3["💥 Exploiter"]
+        W4["🛡️ WAF Bypass"]
+        W5["✅ Validator"]
+        W6["📝 Reporter"]
     end
 
     subgraph Memory["SHARED MEMORY"]
-        MEM[("Qdrant + Mem0<br/>Findings • Creds<br/>Attack Chains")]
+        MEM[("Qdrant + Mem0<br/>All agents share context")]
     end
 
-    subgraph Bus["MESSAGE BUS"]
-        MSG["Real-time Events<br/>Finding Broadcasts<br/>Endpoint Discovery"]
-    end
+    MA --> TOOLS
+    MA --> SWARM
+    SWARM -->|"needs recon"| W1
+    SWARM -->|"needs scanning"| W2
+    SWARM -->|"needs exploitation"| W3
+    SWARM -->|"WAF detected"| W4
+    SWARM -->|"validate finding"| W5
+    SWARM -->|"generate report"| W6
 
-    MC --> RECON & SCANNER
-    MC --> EXPLOITER & WAF
-    MC --> VALIDATOR --> REPORTER
-
-    RECON & SCANNER --> MEM
-    EXPLOITER & WAF --> MEM
-    VALIDATOR & REPORTER --> MEM
-
-    MEM <--> MSG
-    MSG <--> RECON & SCANNER & EXPLOITER & WAF & VALIDATOR & REPORTER
+    W1 & W2 & W3 & W4 & W5 & W6 --> MEM
+    MA <--> MEM
 ```
 
-**Key Architecture Principles:**
-- **MetaCoordinator NEVER executes commands** - it only orchestrates worker agents
-- **Workers share memory** via Mem0/Qdrant (same operation_id)
-- **Real-time communication** via MessageBus (finding broadcasts, endpoint discovery)
-- **Findings are validated** before reporting - no false positives
+**How it works:**
+1. **Meta Agent receives task** - "Find vulnerabilities in target.com"
+2. **Meta Agent works directly** - Uses `execute_command` to run nmap, gobuster, etc.
+3. **Meta Agent spawns help when needed** - Uses `swarm` tool to delegate:
+   - "I found a potential SQLi, spawn an **Exploiter** to confirm and extract data"
+   - "WAF is blocking me, spawn a **WAF Bypass** specialist"
+   - "Need deeper recon, spawn a **Recon** agent for subdomain enum"
+4. **Sub-agents return results** - Meta Agent continues with new intelligence
+5. **Shared Memory** - All agents read/write to same Qdrant collection
 
 ### 4. Persistent Memory System
 
@@ -370,30 +369,27 @@ flowchart TB
         CLI["CLI Shell<br/>inferno shell"]
     end
 
-    subgraph Core["AGENT CORE"]
-        EXEC["Agent Executor<br/>SDKExecutor"]
+    subgraph MetaAgent["META AGENT"]
+        EXEC["SDKExecutor<br/>Autonomous Reasoning"]
         CLAUDE["Claude API<br/>Opus 4.5"]
-    end
 
-    subgraph Tools["4 CORE TOOLS"]
-        CMD["execute_command<br/>Any security tool"]
-        HTTP["http_request<br/>Advanced HTTP"]
-        MEM["memory<br/>Store/Recall"]
-        THINK["think<br/>Reasoning"]
-    end
-
-    subgraph Meta["META COORDINATOR"]
-        direction TB
-        COORD["Coordinator<br/>(Never executes)"]
-
-        subgraph Workers["WORKER AGENTS"]
-            direction LR
-            W1["🔍 Recon"]
-            W2["🎯 Scanner"]
-            W3["💥 Exploiter"]
-            W4["✅ Validator"]
-            W5["📝 Reporter"]
+        subgraph Tools["5 CORE TOOLS"]
+            CMD["⚡ execute_command"]
+            HTTP["🌐 http_request"]
+            MEM_T["🧠 memory"]
+            THINK["💭 think"]
+            SWARM["🐝 swarm"]
         end
+    end
+
+    subgraph Workers["SPAWNED SUB-AGENTS"]
+        direction LR
+        W1["Recon"]
+        W2["Scanner"]
+        W3["Exploiter"]
+        W4["WAF Bypass"]
+        W5["Validator"]
+        W6["Reporter"]
     end
 
     subgraph Intel["INTELLIGENT EXPLOITATION ENGINE"]
@@ -412,9 +408,8 @@ flowchart TB
         BRANCH["Branch Tracker"]
     end
 
-    subgraph Storage["STORAGE"]
-        QDRANT[("Qdrant<br/>Vector Memory")]
-        BUS["MessageBus<br/>Real-time Events"]
+    subgraph Storage["SHARED MEMORY"]
+        QDRANT[("Qdrant + Mem0<br/>Persistent Knowledge")]
     end
 
     subgraph External["SECURITY TOOLS"]
@@ -426,17 +421,15 @@ flowchart TB
     EXEC --> Tools
     CMD --> TOOLS
 
-    EXEC --> COORD
-    COORD --> Workers
-    W1 & W2 & W3 & W4 & W5 --> Tools
+    SWARM -->|"spawn on demand"| Workers
+    Workers --> Tools
 
-    W3 --> Intel
+    EXEC --> Intel
     Intel --> MUT
 
     Tools --> Safety
-    COORD --> QDRANT
-    Workers <--> BUS
-    BUS <--> QDRANT
+    EXEC <--> QDRANT
+    Workers --> QDRANT
 ```
 
 ### Component Overview
@@ -444,11 +437,11 @@ flowchart TB
 | Component | Purpose |
 |-----------|---------|
 | **CLI Shell** | Interactive command interface |
-| **Agent Executor** | Orchestrates Claude conversations |
-| **Meta Coordinator** | Coordinates worker agents (never executes directly) |
-| **Worker Agents** | Specialized agents: Recon, Scanner, Exploiter, Validator, Reporter |
-| **Memory (Qdrant)** | Vector database for persistent knowledge |
-| **MessageBus** | Real-time inter-agent communication |
+| **Meta Agent (SDKExecutor)** | Main autonomous agent - reasons, plans, executes |
+| **5 Core Tools** | execute_command, http_request, memory, think, **swarm** |
+| **Swarm Tool** | Spawns specialized sub-agents on demand |
+| **Sub-Agents** | Specialists: Recon, Scanner, Exploiter, WAF Bypass, Validator, Reporter |
+| **Shared Memory (Qdrant)** | All agents share context via vector database |
 | **Scope Manager** | Enforces authorized testing boundaries |
 | **Guardrails** | Security policies and safety checks |
 | **Branch Tracker** | Decision tracking and backtracking |
