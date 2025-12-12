@@ -43,31 +43,6 @@ from inferno.tools.shell_session import (
 
 logger = structlog.get_logger(__name__)
 
-# ============================================================================
-# Docker Manager (Lazy Loaded)
-# ============================================================================
-
-_docker_manager = None
-
-
-def _get_docker_manager():
-    """Get or create the Docker manager instance for Kali container execution."""
-    global _docker_manager
-    if _docker_manager is None:
-        from inferno.setup.docker_manager import DockerManager
-        _docker_manager = DockerManager()
-    return _docker_manager
-
-
-def _is_docker_available() -> bool:
-    """Check if Docker is available and Kali can be started."""
-    try:
-        docker = _get_docker_manager()
-        return docker.ensure_kali_running()
-    except Exception as e:
-        logger.warning("docker_not_available", error=str(e))
-        return False
-
 
 # ============================================================================
 # Session Management (Using ShellSession)
@@ -208,18 +183,17 @@ def detect_environment() -> Dict[str, Any]:
 
 def get_environment_info() -> str:
     """Get human-readable environment info."""
-    lines = ["Execution Environment:"]
-    lines.append("  Mode: Docker (Kali Linux container)")
-    lines.append("  Container: inferno-kali")
-    lines.append("  Workspace: /workspace")
-    lines.append("")
-    lines.append("Available Tools:")
-    lines.append("  Scanning: nmap, masscan")
-    lines.append("  Web: gobuster, ffuf, dirb, feroxbuster, nikto")
-    lines.append("  Vuln: sqlmap, nuclei, wpscan")
-    lines.append("  Brute: hydra, john, hashcat, medusa")
-    lines.append("  Recon: subfinder, amass, dnsrecon, whatweb, wafw00f")
-    lines.append("  Wordlists: /usr/share/seclists")
+    env = detect_environment()
+    lines = ["Current Environment:"]
+
+    if env["type"] == "container":
+        lines.append(f"  Container: {env['container'][:12]}")
+    elif env["type"] == "ssh":
+        lines.append(f"  SSH: {env['ssh_user']}@{env['ssh_host']}")
+    else:
+        lines.append("  Local execution")
+
+    lines.append(f"  Workspace: {env['workspace']}")
     return "\n".join(lines)
 
 
@@ -231,20 +205,17 @@ def get_environment_info() -> str:
     category=ToolCategory.CORE,
     defer_loading=False,
     name="execute_command",
-    description="""Execute any command in the Kali Linux Docker container.
+    description="""Execute any command on the target system.
 
-This is the PRIMARY tool for running commands. All commands run inside an
-isolated Kali Linux container with full pentesting toolkit pre-installed.
+This is the PRIMARY tool for running commands. Use it for:
+- Security tools: nmap, sqlmap, gobuster, nikto, hydra, nuclei, etc.
+- System commands: ls, cat, grep, find, whoami, id, etc.
+- Network tools: curl, wget, nc, ssh, ping, dig, etc.
+- Scripts: python, bash, perl, ruby, etc.
+- Everything else - just run the command you need.
 
-Available tools in container:
-- Scanning: nmap, masscan
-- Web fuzzing: gobuster, ffuf, dirb, feroxbuster
-- Vuln scanners: nikto, sqlmap, nuclei, wpscan
-- Brute force: hydra, john, hashcat, medusa
-- Exploitation: searchsploit (exploitdb)
-- Recon: subfinder, amass, dnsrecon, whatweb, wafw00f
-- Utilities: curl, wget, python3, netcat, git, jq
-- Wordlists: SecLists at /usr/share/seclists
+The system auto-detects the environment (local, container, SSH) and
+handles timeouts adaptively based on command type.
 
 Special commands for session management:
 - "sessions" - list active sessions with friendly IDs (S1, S2, S3...)
@@ -254,6 +225,7 @@ Special commands for session management:
 - "env info" - show current execution environment
 
 Sessions support friendly IDs (S1, S2, etc.) for easier reference.
+You can also use #1, 1, or the full session ID.
 """,
 )
 async def execute_command(
@@ -398,37 +370,40 @@ async def execute_command(
             logger.error("session_start_failed", error=str(e))
             return ToolResult(success=False, output="", error=f"Failed to start session: {e}")
 
-    # Standard command execution - ALWAYS use Docker/Kali container
-    logger.info("executing_command", command=command[:200], timeout=timeout, execution="docker")
+    # Standard command execution
+    logger.info("executing_command", command=command[:200], timeout=timeout)
 
     try:
-        # Get Docker manager and execute in Kali container
-        docker = _get_docker_manager()
-
-        # Ensure Kali is running
-        if not docker.ensure_kali_running():
-            return ToolResult(
-                success=False, output="",
-                error="Failed to start Kali container. Run 'inferno setup' to configure Docker.",
-                metadata={"execution": "docker_failed"}
-            )
-
-        # Execute command in Kali container
-        # Map working directory to /workspace in container
-        workdir = "/workspace"
-        if cwd:
-            # If a specific working dir is set, use it relative to /workspace
-            workdir = str(cwd) if str(cwd).startswith("/workspace") else "/workspace"
-
-        result = await docker.execute_in_kali(
-            command=command,
-            timeout=timeout,
-            workdir=workdir,
+        process = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
         )
 
-        stdout_str = result.get("stdout", "")
-        stderr_str = result.get("stderr", "")
-        return_code = result.get("return_code", -1)
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            # Graceful termination
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+
+            return ToolResult(
+                success=False, output="",
+                error=f"Command timed out after {timeout}s",
+                metadata={"timeout": timeout}
+            )
+
+        # Decode output
+        stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
+        stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
 
         # Combine output
         if stdout_str and stderr_str:
@@ -436,38 +411,29 @@ async def execute_command(
         else:
             output = stdout_str or stderr_str
 
-        # Check for timeout
-        if result.get("timed_out"):
-            return ToolResult(
-                success=False, output=output,
-                error=f"Command timed out after {timeout}s",
-                metadata={"timeout": timeout, "execution": "docker"}
-            )
-
         # Truncate large output
         max_size = 100000
         if len(output) > max_size:
             output = output[:max_size] + f"\n\n[Output truncated at {max_size} chars]"
 
-        success = return_code == 0
+        success = process.returncode == 0
 
         logger.info(
             "command_complete",
-            return_code=return_code,
+            return_code=process.returncode,
             output_length=len(output),
-            execution="docker",
         )
 
         return ToolResult(
             success=success,
             output=output,
-            error=None if success else f"Exit code: {return_code}",
-            metadata={"return_code": return_code, "command": command, "execution": "docker"}
+            error=None if success else f"Exit code: {process.returncode}",
+            metadata={"return_code": process.returncode, "command": command}
         )
 
     except Exception as e:
         logger.error("command_error", error=str(e), exc_info=True)
-        return ToolResult(success=False, output="", error=f"Docker execution failed: {e}")
+        return ToolResult(success=False, output="", error=f"Execution failed: {e}")
 
 
 # ============================================================================

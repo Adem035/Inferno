@@ -14,8 +14,6 @@ import structlog
 
 from claude_agent_sdk import tool, create_sdk_mcp_server
 
-from inferno.tools.execute_command import execute_command
-
 logger = structlog.get_logger(__name__)
 
 # Global NVD tool instance
@@ -934,8 +932,6 @@ def create_inferno_mcp_server():
         name="inferno",
         version="1.0.0",
         tools=[
-            # PRIMARY TOOL - all commands run in Docker/Kali container
-            execute_command,
             # Memory tools
             memory_store,
             memory_search,

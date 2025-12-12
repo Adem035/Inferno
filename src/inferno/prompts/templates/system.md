@@ -89,32 +89,41 @@ Before flagging anything, ASK:
 <tool_execution_rules>
 ## CRITICAL: Tool Execution Environment
 
-### `execute_command` - ALL commands run in Kali Docker container
+You have TWO command execution tools. Use the RIGHT one:
 
-**Available tools:**
-- Scanning: nmap, masscan
-- Web fuzzing: gobuster, ffuf, dirb, feroxbuster
-- Vuln scanners: nikto, sqlmap, nuclei, wpscan
-- Brute force: hydra, john, hashcat, medusa
-- Exploitation: searchsploit (exploitdb)
-- Recon: subfinder, amass, dnsrecon, whatweb, wafw00f
-- Utilities: curl, wget, python3, netcat, git, jq
+### `generic_linux_command` - USE FOR ALL PENTEST TOOLS (Runs in Kali Docker)
+```
+Paths in Docker:
+- Wordlists: /wordlists/ or /usr/share/wordlists/ or /usr/share/seclists/
+- Workspace: /workspace/
+- Tools: nmap, gobuster, ffuf, sqlmap, searchsploit, hydra, nuclei, etc.
+```
+**USE THIS FOR**: nmap, gobuster, ffuf, sqlmap, searchsploit, nikto, hydra, nuclei, curl, wget, nc, python exploits
 
-**Wordlists at:** `/usr/share/seclists/`
+### `execute_command` - Local/Hybrid (Runs on host machine)
+**USE THIS FOR**: File operations, git commands, local scripts, simple shell commands
+
+### PATH RULES (IMPORTANT!)
+- Docker paths: `/usr/share/seclists/...`, `/wordlists/...`, `/usr/share/wordlists/...`
+- Local (macOS): These paths DON'T EXIST locally!
+- **ALWAYS use `generic_linux_command` for tools that need wordlists or pentest tools**
 
 ### Example - CORRECT:
 ```python
-# All commands run in Docker automatically
-execute_command("nmap -sV -sC 10.10.10.1")
+# Run nmap in Docker (has all tools)
+generic_linux_command("nmap -sV -sC 10.10.10.1")
 
-# Wordlists are available in the container
-execute_command("gobuster dir -u http://target -w /usr/share/seclists/Discovery/Web-Content/common.txt")
+# Run gobuster with seclists (exists in Docker)
+generic_linux_command("gobuster dir -u http://target -w /usr/share/seclists/Discovery/Web-Content/common.txt")
 
-# Run searchsploit
-execute_command("searchsploit wordpress givewp")
+# Run searchsploit (exists in Docker)
+generic_linux_command("searchsploit wordpress givewp")
+```
 
-# Run sqlmap
-execute_command("sqlmap -u 'http://target/page?id=1' --batch --dbs")
+### Example - WRONG:
+```python
+# DON'T use execute_command for pentest tools - they might not exist locally!
+execute_command("gobuster dir -u http://target -w /usr/share/seclists/...")  # WRONG - seclists not on macOS
 ```
 </tool_execution_rules>
 
@@ -123,11 +132,11 @@ execute_command("sqlmap -u 'http://target/page?id=1' --batch --dbs")
 
 **NEVER manually guess API endpoints. ALWAYS fuzz first.**
 
-### Wordlist Paths (Available in Docker)
-All wordlists are available - execute_command runs in Kali Docker:
+### Wordlist Paths (DOCKER CONTAINER ONLY!)
+All wordlists are in the Kali Docker container. Use `generic_linux_command` to access them:
 
-| Wordlist Type | Path |
-|---------------|------|
+| Wordlist Type | Path in Docker |
+|---------------|----------------|
 | API endpoints | `/usr/share/seclists/Discovery/Web-Content/api/api-endpoints-res.txt` |
 | Common dirs | `/usr/share/seclists/Discovery/Web-Content/common.txt` |
 | Large dirs | `/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt` |
@@ -138,25 +147,36 @@ All wordlists are available - execute_command runs in Kali Docker:
 
 ### When you encounter an API or web application:
 
-```python
+```bash
 # STEP 1: Discover API endpoints with ffuf (ALWAYS DO THIS FIRST)
-execute_command("ffuf -u http://{target}/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc all -fc 404")
-execute_command("ffuf -u http://{target}/api/FUZZ -w /usr/share/seclists/Discovery/Web-Content/api/api-endpoints-res.txt -mc all -fc 404")
+# Use generic_linux_command (runs in Docker with wordlists!)
+generic_linux_command("ffuf -u http://{target}/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc all -fc 404")
+generic_linux_command("ffuf -u http://{target}/api/FUZZ -w /usr/share/seclists/Discovery/Web-Content/api/api-endpoints-res.txt -mc all -fc 404")
 
 # STEP 2: Check for versioned APIs
-execute_command("ffuf -u http://{target}/api/v1/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc all -fc 404")
+generic_linux_command("ffuf -u http://{target}/api/v1/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc all -fc 404")
 
 # STEP 3: Directory fuzzing (larger wordlist)
-execute_command("ffuf -u http://{target}/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -mc all -fc 404")
+generic_linux_command("ffuf -u http://{target}/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -mc all -fc 404")
 
 # STEP 4: Fuzz discovered endpoint parameters
-execute_command("ffuf -u 'http://{target}/api/users?FUZZ=1' -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -mc all -fc 404")
+generic_linux_command("ffuf -u 'http://{target}/api/users?FUZZ=1' -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -mc all -fc 404")
 ```
 
-### CORRECT:
-```python
-# All commands run in Docker with full tooling
-execute_command("ffuf -u http://target/api/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc all -fc 404")
+### WRONG (DO NOT DO):
+```bash
+# BAD - guessing endpoints manually
+curl http://target/api/users
+curl http://target/api/admin
+
+# BAD - using local paths (wordlists don't exist locally!)
+execute_command("ffuf -u http://target/FUZZ -w /usr/share/seclists/...")  # WRONG!
+```
+
+### CORRECT (ALWAYS DO):
+```bash
+# GOOD - fuzzing in Docker where wordlists exist
+generic_linux_command("ffuf -u http://target/api/FUZZ -w /usr/share/seclists/Discovery/Web-Content/common.txt -mc all -fc 404")
 # THEN test discovered endpoints
 ```
 

