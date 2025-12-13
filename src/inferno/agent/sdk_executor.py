@@ -17,27 +17,31 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable
+from typing import Any, Callable
 
 import structlog
-
 from claude_agent_sdk import (
-    ClaudeSDKClient,
-    ClaudeAgentOptions,
     AssistantMessage,
-    TextBlock,
-    ToolUseBlock,
-    ToolResultBlock,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    PermissionResultAllow,
     ResultMessage,
     SystemMessage,
-    UserMessage,
-    PermissionResultAllow,
-    ToolPermissionContext,
+    TextBlock,
     ThinkingBlock,
+    ToolPermissionContext,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
 )
 
+from inferno.agent.mcp_tools import (
+    configure_memory,
+    create_inferno_mcp_server,
+    set_operation_id,
+    set_target,
+)
 from inferno.config.settings import InfernoSettings
-from inferno.agent.mcp_tools import create_inferno_mcp_server, set_operation_id, configure_memory, set_target
 
 # Memory tool (kept)
 try:
@@ -47,18 +51,15 @@ except ImportError:
     MEMORY_TOOL_AVAILABLE = False
 
 # Branch tracker (kept - unique, useful feature)
-from inferno.core.branch_tracker import BranchTracker, BranchStatus, DecisionType
+# System prompt builder (kept)
+from inferno.agent.prompts import SystemPromptBuilder
+from inferno.core.branch_tracker import BranchTracker
 
 # Session trace for user visibility
 from inferno.observability.session_trace import (
     SessionTrace,
     init_session_trace,
-    end_session_trace,
-    get_session_trace,
 )
-
-# System prompt builder (kept)
-from inferno.agent.prompts import SystemPromptBuilder
 from inferno.prompts import AgentPersona
 
 # Algorithm learning integration (wiring dead code into execution)
@@ -66,8 +67,6 @@ try:
     from inferno.algorithms.integration import (
         LoopIntegration,
         get_loop_integration,
-        learned_trigger_select,
-        record_subagent_outcome,
     )
     ALGORITHM_LEARNING_AVAILABLE = True
 except ImportError:
@@ -75,8 +74,8 @@ except ImportError:
 
 # Attack intelligence for smarter exploitation
 try:
-    from inferno.core.attack_selector import get_attack_selector, AttackSelector
-    from inferno.core.hint_extractor import get_hint_extractor, HintExtractor
+    from inferno.core.attack_selector import AttackSelector, get_attack_selector
+    from inferno.core.hint_extractor import HintExtractor, get_hint_extractor
     ATTACK_INTELLIGENCE_AVAILABLE = True
 except ImportError:
     ATTACK_INTELLIGENCE_AVAILABLE = False
@@ -84,9 +83,8 @@ except ImportError:
 # Guardrails (kept - security critical)
 try:
     from inferno.core.guardrails import (
-        GuardrailEngine,
-        GuardrailType,
         GuardrailAction,
+        GuardrailEngine,
         GuardrailResult,
         get_guardrail_engine,
     )
@@ -1135,7 +1133,7 @@ The system automatically monitors progress and can suggest when to try different
                 urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', findings)
                 for url in urls[:20]:  # Limit to avoid overload
                     try:
-                        from urllib.parse import urlparse, parse_qs
+                        from urllib.parse import parse_qs, urlparse
                         parsed = urlparse(url)
                         endpoint_path = parsed.path or "/"
 
@@ -1175,80 +1173,21 @@ The system automatically monitors progress and can suggest when to try different
             parameters=len(self._app_model.parameters),
         )
 
-    def _build_strategic_context(self, attack_plan: AttackPlan) -> str:
+    def _build_strategic_context(self, attack_plan: Any) -> str:
         """
         Build strategic context section for system prompt from attack plan.
 
+        NOTE: Strategic planning was removed in the rebuild. This method is kept
+        as a stub for backwards compatibility but returns empty string.
+
         Args:
-            attack_plan: The generated attack plan.
+            attack_plan: The generated attack plan (unused).
 
         Returns:
-            Formatted strategic context string.
+            Empty string - strategic planning disabled.
         """
-        sections = []
-
-        sections.append("# STRATEGIC ATTACK PLAN")
-        sections.append(f"\nPlan ID: {attack_plan.plan_id}")
-        sections.append(f"Mode: {attack_plan.mode}")
-        sections.append(f"Total Estimated Tokens: {attack_plan.total_estimated_tokens:,}")
-
-        # High-value targets
-        if attack_plan.high_value_targets:
-            sections.append(f"\n## High-Value Targets (Priority Testing)")
-            for target in attack_plan.high_value_targets[:5]:
-                sections.append(f"- {target}")
-
-        # Skip list
-        if attack_plan.skip_list:
-            sections.append(f"\n## Skip These Attacks (Low Probability)")
-            for skip_item in attack_plan.skip_list[:5]:
-                sections.append(f"- {skip_item}")
-
-        # Budget allocation
-        if attack_plan.phases_budget:
-            sections.append("\n## Token Budget Allocation by Phase")
-            for phase, percentage in attack_plan.phases_budget.items():
-                tokens = int(attack_plan.total_estimated_tokens * percentage)
-                sections.append(f"- {phase.title()}: {percentage:.0%} ({tokens:,} tokens)")
-
-        # Top priority steps
-        all_steps = attack_plan.get_all_steps()
-        critical_steps = [s for s in all_steps if s.priority.value == "critical"]
-        high_steps = [s for s in all_steps if s.priority.value == "high"]
-
-        if critical_steps:
-            sections.append("\n## CRITICAL Priority Steps (Execute First)")
-            for step in critical_steps[:3]:
-                sections.append(f"\n### {step.description}")
-                sections.append(f"- **Attack Type**: {step.attack_type.value}")
-                sections.append(f"- **Target**: {step.target}")
-                sections.append(f"- **Rationale**: {step.rationale}")
-                if step.tools_needed:
-                    sections.append(f"- **Tools**: {', '.join(step.tools_needed)}")
-
-        if high_steps:
-            sections.append("\n## HIGH Priority Steps")
-            for step in high_steps[:5]:
-                sections.append(f"- **{step.description}** ({step.attack_type.value}) - {step.rationale[:100]}")
-
-        # Attack chains
-        if attack_plan.attack_chains:
-            sections.append("\n## Recommended Attack Chains")
-            for chain in attack_plan.attack_chains[:3]:
-                sections.append(f"\n### {chain.name} (Impact: {chain.expected_impact})")
-                sections.append(f"**Rationale**: {chain.rationale}")
-                sections.append("**Steps**:")
-                for i, step in enumerate(chain.steps, 1):
-                    sections.append(f"  {i}. {step.description} ({step.attack_type.value})")
-
-        sections.append("\n## Execution Instructions")
-        sections.append("1. **Start with CRITICAL priority steps** - These have highest success probability")
-        sections.append("2. **Track progress** - Mark steps complete using memory_store")
-        sections.append("3. **Follow attack chains** - When you find vulnerabilities, check if they enable chains")
-        sections.append("4. **Stay within budget** - Monitor token usage per phase")
-        sections.append("5. **Skip low-probability attacks** - Focus on high-value targets identified in plan")
-
-        return "\n".join(sections)
+        # Strategic planning removed - let the LLM decide attack priorities
+        return ""
 
     async def _handle_finding(self, finding: dict[str, Any]) -> None:
         """
@@ -1440,71 +1379,9 @@ The system automatically monitors progress and can suggest when to try different
         if config.enable_strategic_planning and STRATEGIC_PLANNING_AVAILABLE:
             logger.info("strategic_planning_phase_starting")
 
-            try:
-                # 1. Initialize strategic components
-                self._app_model = ApplicationModel(target=config.target)
-                self._param_analyzer = ParameterRoleAnalyzer()
-
-                # Get API key for planner
-                planner_api_key = None
-                if self._settings and self._settings.anthropic_api_key:
-                    planner_api_key = self._settings.anthropic_api_key.get_secret_value()
-                if not planner_api_key:
-                    import os
-                    planner_api_key = os.environ.get("ANTHROPIC_API_KEY")
-
-                if planner_api_key:
-                    from anthropic import Anthropic
-                    planner_client = Anthropic(api_key=planner_api_key)
-                    self._planner = StrategicPlanner(
-                        client=planner_client,
-                        operation_dir=artifacts_dir,
-                        target=config.target,
-                        objective=config.objective,
-                    )
-                else:
-                    logger.warning("strategic_planner_skipped", reason="No API key available")
-                    self._planner = None
-
-                # 2. Run parallel initial reconnaissance if enabled
-                initial_recon_results: dict[str, str] = {}
-                if config.enable_parallel_initial_recon:
-                    initial_recon_results = await self._run_parallel_initial_recon(
-                        config, artifacts_dir, operation_id
-                    )
-
-                    # 3. Build initial application model from recon
-                    if initial_recon_results:
-                        await self._build_initial_model(initial_recon_results)
-
-                # 4. Generate attack plan if planner available
-                if self._planner:
-                    attack_plan = await self._planner.create_plan(
-                        target=config.target,
-                        objective=config.objective,
-                        initial_recon=initial_recon_results if initial_recon_results else None,
-                        mode=config.persona,
-                        max_tokens=config.max_turns * 2000,  # Rough estimate
-                    )
-
-                    logger.info(
-                        "strategic_plan_created",
-                        plan_id=attack_plan.plan_id,
-                        total_steps=len(attack_plan.get_all_steps()),
-                        critical_steps=len([s for s in attack_plan.get_all_steps() if s.priority.value == "critical"]),
-                        attack_chains=len(attack_plan.attack_chains),
-                    )
-
-                    # 5. Build strategic context for injection into system prompt
-                    strategic_context = self._build_strategic_context(attack_plan)
-
-                    # 6. Coordinator removed in rebuild - subagents use SwarmTool directly
-                    # via the swarm MCP tool which uses Claude SDK (supports OAuth)
-
-            except Exception as e:
-                logger.error("strategic_planning_phase_failed", error=str(e))
-                # Continue without strategic planning
-                strategic_context = ""
+            # Strategic planning was removed in rebuild - the LLM decides attack priorities
+            # This block is disabled via STRATEGIC_PLANNING_AVAILABLE = False
+            logger.info("strategic_planning_disabled", reason="Feature removed in rebuild")
 
         # Build system prompt and sanitize bracket tags to prevent XML parsing errors
         system_prompt = sanitize_bracket_tags(self._build_system_prompt(config, artifacts_dir))
@@ -2358,58 +2235,18 @@ Continue the assessment now. Start by recalling memories.""")
 
         return "\n".join(sections)
 
-    def _create_quality_pipeline(self) -> "QualityGatePipeline | None":
+    def _create_quality_pipeline(self) -> None:
         """
         Create quality gate pipeline for finding validation.
 
-        The pipeline enforces quality standards on findings:
-        - SoWhatGate: Validates concrete impact and exploitability
-        - TechnologyContextGate: Filters public-by-design features
-        - EscalationGate: Requires escalation attempts
-        - SeverityGate: Calibrates severity ratings
-        - PreReportChecklistGate: Final quality checks
+        NOTE: Quality gates were removed in the rebuild. The LLM now validates
+        findings directly through its reasoning process.
 
         Returns:
-            Configured QualityGatePipeline or None if not available.
+            None - quality gates disabled.
         """
-        if not QUALITY_GATES_AVAILABLE:
-            return None
-
-        try:
-            # Create quality configuration
-            config = QualityConfig(
-                min_escalation_attempts=3,
-                require_concrete_impact=True,
-                demote_theoretical_findings=True,
-                min_quality_score=0.7,
-                require_production_check=True,
-                require_impact_demonstration=True,
-                require_escalation_documentation=True,
-            )
-
-            # Create pipeline
-            pipeline = QualityGatePipeline(config=config)
-
-            # Register all gates in order
-            pipeline.register_gates([
-                SoWhatGate(config),
-                TechnologyContextGate(config),
-                EscalationGate(config),
-                SeverityGate(config),
-                PreReportChecklistGate(config),
-            ])
-
-            logger.info(
-                "quality_pipeline_created",
-                gate_count=pipeline.gate_count,
-                blocking_gates=pipeline.blocking_gate_count,
-            )
-
-            return pipeline
-
-        except Exception as e:
-            logger.warning("quality_pipeline_creation_failed", error=str(e))
-            return None
+        # Quality gates removed in rebuild - let the LLM validate findings
+        return None
 
     def _create_validation_orchestrator(self, config: "AssessmentConfig") -> None:
         """
@@ -2446,9 +2283,9 @@ Continue the assessment now. Start by recalling memories.""")
         Removes Python scripts, cookie files, and other temp files
         that may contain sensitive information.
         """
+        import fnmatch
         import os
         import shutil
-        import fnmatch
 
         tmp_dir = "/tmp"
         deleted_count = 0
@@ -2524,7 +2361,7 @@ Continue the assessment now. Start by recalling memories.""")
         Returns:
             Agent's response as a string.
         """
-        from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
+        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
         from claude_agent_sdk.types import (
             AssistantMessage,
             TextBlock,
@@ -2773,7 +2610,7 @@ class MinimalSDKExecutor:
         system_prompt = build_minimal_prompt(config.target, config.objective)
 
         # Create MCP server with only 3 tools
-        from mcp import Server, Tool
+        from mcp import Server
         from mcp.types import TextContent
 
         minimal_mcp = Server(name="inferno-minimal")

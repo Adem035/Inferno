@@ -7,12 +7,12 @@ cost tracking, and session tracing.
 
 from inferno.observability.metrics import MetricsCollector, OperationMetrics
 from inferno.observability.session_trace import (
+    EventType,
     SessionTrace,
     TraceEvent,
-    EventType,
+    end_session_trace,
     get_session_trace,
     init_session_trace,
-    end_session_trace,
 )
 
 __all__ = [

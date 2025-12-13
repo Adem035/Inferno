@@ -18,29 +18,29 @@ Communication:
   - Request/response between specific agents
 """
 
-from inferno.swarm.tool import SwarmTool
-from inferno.swarm.agents import SubAgentType, SubAgentConfig
+from inferno.swarm.agents import SubAgentConfig, SubAgentType
+from inferno.swarm.message_bus import (
+    Message,
+    MessageBus,
+    MessagePriority,
+    MessageType,
+    get_message_bus,
+    publish_chain,
+    publish_endpoint,
+    publish_finding,
+    request_validation,
+    reset_message_bus,
+)
 from inferno.swarm.meta_coordinator import (
-    MetaCoordinator,
     AssessmentPhase,
-    WorkerType,
-    WorkerTask,
+    AssessmentState,
     Finding,
     FindingStatus,
-    AssessmentState,
+    MetaCoordinator,
+    WorkerTask,
+    WorkerType,
 )
-from inferno.swarm.message_bus import (
-    MessageBus,
-    MessageType,
-    MessagePriority,
-    Message,
-    get_message_bus,
-    reset_message_bus,
-    publish_finding,
-    publish_endpoint,
-    publish_chain,
-    request_validation,
-)
+from inferno.swarm.tool import SwarmTool
 
 __all__ = [
     # Swarm tool (original)

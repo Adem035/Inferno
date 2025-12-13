@@ -11,8 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-
-from claude_agent_sdk import tool, create_sdk_mcp_server
+from claude_agent_sdk import create_sdk_mcp_server, tool
 
 logger = structlog.get_logger(__name__)
 
@@ -782,8 +781,8 @@ def _get_findings_file() -> str:
     """Get the key findings file path, creating default if needed."""
     global _key_findings_file
     if _key_findings_file is None:
-        import tempfile
         import os
+        import tempfile
         # Use temp dir with operation ID if available
         if _operation_id:
             _key_findings_file = os.path.join(tempfile.gettempdir(), f"inferno_findings_{_operation_id}.txt")

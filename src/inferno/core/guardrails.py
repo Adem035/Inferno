@@ -37,13 +37,16 @@ from typing import Any, Callable, Dict, List, Optional, Pattern, TypeVar, Union
 
 import structlog
 
-# Import homograph detection from canonical source
 from inferno.core.unicode_security import (
-    normalize_text as normalize_unicode_homographs,
-    detect_homograph_bypass,
     ALL_LOOKALIKES,
     CONFUSABLES,
     ZERO_WIDTH_CHARS,
+    detect_homograph_bypass,
+)
+
+# Import homograph detection from canonical source
+from inferno.core.unicode_security import (
+    normalize_text as normalize_unicode_homographs,
 )
 
 logger = structlog.get_logger(__name__)

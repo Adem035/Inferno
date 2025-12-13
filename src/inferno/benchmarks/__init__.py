@@ -7,18 +7,18 @@ performance on security assessment tasks.
 Inspired by CAIBench integration patterns.
 """
 
-from inferno.benchmarks.runner import (
-    BenchmarkRunner,
-    BenchmarkConfig,
-    BenchmarkResult,
-    BenchmarkSuite,
-    get_benchmark_runner,
-)
 from inferno.benchmarks.metrics import (
+    AccuracyMetrics,
     BenchmarkMetrics,
     MetricsCollector,
-    AccuracyMetrics,
     PerformanceMetrics,
+)
+from inferno.benchmarks.runner import (
+    BenchmarkConfig,
+    BenchmarkResult,
+    BenchmarkRunner,
+    BenchmarkSuite,
+    get_benchmark_runner,
 )
 from inferno.benchmarks.tasks import (
     BenchmarkTask,

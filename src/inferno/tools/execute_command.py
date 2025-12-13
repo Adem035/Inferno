@@ -28,17 +28,16 @@ import structlog
 from inferno.tools.base import ToolCategory, ToolResult
 from inferno.tools.decorator import function_tool
 from inferno.tools.shell_session import (
-    ShellSession,
     create_shell_session,
-    list_shell_sessions,
+    format_sessions_table,
+    get_session,
     resolve_session_id,
     send_to_session,
-    get_session_output as shell_get_output,
-    terminate_session,
     terminate_all_sessions,
-    get_session,
-    format_sessions_table,
-    ACTIVE_SESSIONS,
+    terminate_session,
+)
+from inferno.tools.shell_session import (
+    get_session_output as shell_get_output,
 )
 
 logger = structlog.get_logger(__name__)

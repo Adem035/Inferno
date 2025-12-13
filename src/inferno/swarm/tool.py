@@ -10,14 +10,12 @@ supporting OAuth authentication.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from inferno.swarm.agents import (
-    AGENT_TEMPLATES,
     SubAgentConfig,
     SubAgentType,
     create_custom_agent,
@@ -306,22 +304,26 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
         try:
             # Import Claude SDK
             from claude_agent_sdk import (
-                ClaudeSDKClient,
-                ClaudeAgentOptions,
                 AssistantMessage,
-                TextBlock,
-                ToolUseBlock,
-                ResultMessage,
+                ClaudeAgentOptions,
+                ClaudeSDKClient,
                 PermissionResultAllow,
-                ToolPermissionContext,
+                ResultMessage,
+                TextBlock,
                 ThinkingBlock,
+                ToolPermissionContext,
+                ToolUseBlock,
             )
 
             # Build system prompt for the subagent
             system_prompt = self._build_subagent_prompt(config, task, context)
 
             # Create MCP server for subagent with memory tools
-            from inferno.agent.mcp_tools import create_inferno_mcp_server, set_operation_id, configure_memory
+            from inferno.agent.mcp_tools import (
+                configure_memory,
+                create_inferno_mcp_server,
+                set_operation_id,
+            )
 
             # Share operation context with subagent
             if self._operation_id:

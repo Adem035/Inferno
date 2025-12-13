@@ -20,15 +20,15 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, Dict, List, Optional, TypeVar
 
 import structlog
 
 # Try to import Mako, provide fallback if not available
 try:
-    from mako.template import Template
-    from mako.lookup import TemplateLookup
     from mako.exceptions import MakoException
+    from mako.lookup import TemplateLookup
+    from mako.template import Template
     MAKO_AVAILABLE = True
 except ImportError:
     MAKO_AVAILABLE = False
@@ -36,7 +36,7 @@ except ImportError:
     TemplateLookup = None
     MakoException = Exception
 
-from inferno.prompts.engine import PromptEngine, load_prompt_file, PROMPTS_DIR
+from inferno.prompts.engine import PROMPTS_DIR, PromptEngine, load_prompt_file
 
 logger = structlog.get_logger(__name__)
 
@@ -847,8 +847,9 @@ class SystemPromptRenderer:
             return ""
 
         try:
-            from inferno.tools.memory import memory_search
             import asyncio
+
+            from inferno.tools.memory import memory_search
 
             # Run async function
             loop = asyncio.get_event_loop()

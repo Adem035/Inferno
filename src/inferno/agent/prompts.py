@@ -22,10 +22,13 @@ from typing import TYPE_CHECKING, Any
 
 from inferno.prompts import (
     AgentPersona,
-    build_system_prompt as engine_build_system_prompt,
-    build_continuation_prompt as engine_build_continuation_prompt,
-    get_checkpoint_prompt as engine_get_checkpoint_prompt,
     detect_context_type,
+)
+from inferno.prompts import (
+    build_system_prompt as engine_build_system_prompt,
+)
+from inferno.prompts import (
+    get_checkpoint_prompt as engine_get_checkpoint_prompt,
 )
 
 if TYPE_CHECKING:

@@ -18,18 +18,18 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import structlog
 
+from inferno.benchmarks.metrics import (
+    BenchmarkMetrics,
+    MetricsCollector,
+)
 from inferno.benchmarks.tasks import (
     BenchmarkTask,
+    ExpectedFinding,
     TaskCategory,
     TaskDifficulty,
     TaskResult,
     TaskStatus,
     TaskValidation,
-    ExpectedFinding,
-)
-from inferno.benchmarks.metrics import (
-    BenchmarkMetrics,
-    MetricsCollector,
 )
 
 logger = structlog.get_logger(__name__)
@@ -677,11 +677,6 @@ def get_benchmark_runner() -> BenchmarkRunner:
 
 def create_web_security_suite() -> BenchmarkSuite:
     """Create a standard web security benchmark suite."""
-    from inferno.benchmarks.tasks import (
-        create_sqli_task,
-        create_xss_task,
-        create_auth_bypass_task,
-    )
 
     suite = BenchmarkSuite(
         suite_id="web_security_standard",

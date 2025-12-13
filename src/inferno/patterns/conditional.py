@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import structlog
 
 from inferno.patterns.pattern import Pattern, PatternType, conditional_pattern
 
 if TYPE_CHECKING:
-    from inferno.swarm.agents import SubAgentConfig
     from inferno.swarm.message_bus import MessageBus
 
 logger = structlog.get_logger(__name__)

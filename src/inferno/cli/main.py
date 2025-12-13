@@ -14,8 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import sys
-from pathlib import Path
 from typing import Annotated, Optional
 
 # Suppress huggingface/tokenizers parallelism warning early
@@ -24,25 +22,20 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import structlog
 import typer
 from rich.console import Console
-from rich.live import Live
 from rich.markdown import Markdown
 from rich.markup import escape as rich_escape
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.text import Text
 
 from inferno import __version__
-from inferno.agent.sdk_executor import SDKAgentExecutor, AssessmentConfig, ExecutionResult
-from inferno.auth.client import AsyncInfernoClient
+from inferno.agent.sdk_executor import ExecutionResult
 from inferno.auth.credentials import (
     CredentialError,
     CredentialManager,
-    CredentialType,
     OAuthCredentialProvider,
 )
 from inferno.config.environment import discover_security_tools
-from inferno.config.settings import InfernoSettings, ModelTier, ToolSearchVariant
+from inferno.config.settings import InfernoSettings
 from inferno.setup import DockerManager, SetupChecker, SetupStatus
 from inferno.setup.checker import ComponentStatus
 
@@ -390,7 +383,7 @@ def run(
     handler = OutputHandler(verbose=verbose)
 
     # Run minimal assessment
-    from inferno.agent.sdk_executor import MinimalSDKExecutor, MinimalConfig
+    from inferno.agent.sdk_executor import MinimalConfig, MinimalSDKExecutor
 
     async def _run():
         config = MinimalConfig(
@@ -701,7 +694,6 @@ def auth_login() -> None:
     """
     import http.server
     import socketserver
-    import threading
     import webbrowser
     from urllib.parse import parse_qs, urlparse
 

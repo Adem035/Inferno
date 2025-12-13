@@ -15,7 +15,7 @@ from typing import Any
 
 import structlog
 
-from inferno.algorithms.base import SelectionAlgorithm, AlgorithmState
+from inferno.algorithms.base import AlgorithmState, SelectionAlgorithm
 
 logger = structlog.get_logger(__name__)
 

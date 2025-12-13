@@ -13,20 +13,21 @@ from inferno.handlers.base import (
     EventType,
     get_dispatcher,
 )
-from inferno.handlers.tool_handler import (
-    ToolMetricsHandler,
-    ToolResultHandler,
+from inferno.handlers.checkpoint_handler import (
+    Checkpoint,
+    CheckpointHandler,
+    ProgressTracker,
 )
 from inferno.handlers.error_handler import (
     ErrorLoggingHandler,
     ErrorRecord,
     ErrorRecoveryHandler,
 )
-from inferno.handlers.checkpoint_handler import (
-    Checkpoint,
-    CheckpointHandler,
-    ProgressTracker,
+from inferno.handlers.tool_handler import (
+    ToolMetricsHandler,
+    ToolResultHandler,
 )
+
 # NOTE: prompt_rebuild_hook removed (depended on deleted prompt_optimizer module)
 
 

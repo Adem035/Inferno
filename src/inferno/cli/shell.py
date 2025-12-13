@@ -9,43 +9,25 @@ from __future__ import annotations
 
 import asyncio
 import shlex
-import sys
-from pathlib import Path
 from typing import Any, Callable
 
-from rich.console import Console, Group
-from rich.live import Live
+from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape as rich_escape
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.rule import Rule
-from rich.syntax import Syntax
 from rich.table import Table
-from rich.text import Text
 
 from inferno import __version__
 from inferno.cli.display import (
     SEVERITY_STYLES,
-    CompletionSummary,
-    FindingsSummary,
-    PhaseIndicator,
-    SeverityBar,
-    StartupDisplay,
-    ToolCallDisplay,
-    ToolResultDisplay,
-    get_tool_icon,
-    print_finding,
-    print_phase_transition,
-    print_tool_call,
-    print_tool_result,
-    print_startup_display,
 )
-from inferno.cli.logging_config import configure_cli_logging, quiet_logging
+from inferno.cli.logging_config import configure_cli_logging
+from inferno.config.profiles import AssessmentProfile, get_profile_manager
+from inferno.reporting.bug_bounty_export import export_findings
 from inferno.setup import DockerManager, SetupChecker
 from inferno.setup.checker import ComponentStatus
-from inferno.config.profiles import ProfileManager, AssessmentProfile, get_profile_manager
-from inferno.reporting.bug_bounty_export import BugBountyExporter, export_findings
 
 console = Console()
 
@@ -339,7 +321,7 @@ class InfernoShell:
 
     def cmd_start(self, args: list[str]) -> None:
         """Guided assessment setup wizard."""
-        from rich.prompt import Prompt, Confirm
+        from rich.prompt import Confirm, Prompt
 
         console.print()
         console.print(Rule("[bold cyan]Assessment Setup[/bold cyan]", style="cyan"))
@@ -546,13 +528,14 @@ class InfernoShell:
 
     def cmd_login(self, args: list[str]) -> None:
         """Check authentication or start OAuth login."""
+        import platform
+
         from inferno.auth.credentials import (
             CredentialError,
             CredentialManager,
             KeychainCredentialProvider,
             OAuthCredentialProvider,
         )
-        import platform
 
         console.print("\n[bold]Authentication[/bold]\n")
 
@@ -884,7 +867,8 @@ class InfernoShell:
         try:
             import time
             import uuid
-            from inferno.agent.sdk_executor import SDKAgentExecutor, AssessmentConfig
+
+            from inferno.agent.sdk_executor import AssessmentConfig, SDKAgentExecutor
             from inferno.config.settings import InfernoSettings
 
             try:
@@ -897,7 +881,12 @@ class InfernoShell:
 
             # Configure memory and key findings
             try:
-                from inferno.agent.mcp_tools import set_operation_id, configure_memory, set_key_findings_file, configure_swarm
+                from inferno.agent.mcp_tools import (
+                    configure_memory,
+                    configure_swarm,
+                    set_key_findings_file,
+                    set_operation_id,
+                )
 
                 set_operation_id(operation_id)
 
@@ -918,8 +907,8 @@ class InfernoShell:
                 )
 
                 # Set up key findings file for persistence
-                import tempfile
                 import os
+                import tempfile
                 findings_file = os.path.join(tempfile.gettempdir(), f"inferno_findings_{operation_id}.txt")
                 set_key_findings_file(findings_file)
                 console.print(f"[dim]✓ Key findings: {findings_file}[/dim]")
@@ -1497,8 +1486,9 @@ class InfernoShell:
         filename = args[1] if len(args) > 1 else None
 
         # Build a mock report from current findings
-        from inferno.reporting.models import Report, Finding, Severity
         from datetime import datetime, timezone
+
+        from inferno.reporting.models import Finding, Report, Severity
 
         # Convert findings to proper format
         findings = []
@@ -1761,9 +1751,9 @@ class InfernoShell:
 
         try:
             from inferno.tools.advanced.parallel_recon import (
-                ParallelReconEngine,
                 COMMON_SUBDOMAINS,
                 CTF_SUBDOMAINS,
+                ParallelReconEngine,
             )
 
             engine = ParallelReconEngine(max_concurrent=25)
@@ -2063,7 +2053,6 @@ class InfernoShell:
                 get_audit_logger,
                 get_prompt_protector,
                 get_ssrf_protector,
-                SecurityEventType,
             )
 
             audit = get_audit_logger()
@@ -2185,7 +2174,7 @@ class InfernoShell:
         # Parameter Role Analysis stats
         console.print("\n[bold]Parameter Role Analysis:[/bold]")
         try:
-            from inferno.core.parameter_role_analyzer import ParameterRole, TESTING_PRIORITY
+            from inferno.core.parameter_role_analyzer import TESTING_PRIORITY, ParameterRole
             roles = list(ParameterRole)
             console.print(f"  Parameter roles defined: [green]{len(roles)}[/green]")
             console.print(f"  High-priority roles (90+): [green]{len([r for r, p in TESTING_PRIORITY.items() if p >= 90])}[/green]")
@@ -2331,8 +2320,8 @@ class InfernoShell:
         This info is automatically injected into prompts.
         """
         import platform
-        import socket
         import shutil
+        import socket
         from pathlib import Path
 
         console.print("\n[bold magenta]Environment Context[/bold magenta]\n")

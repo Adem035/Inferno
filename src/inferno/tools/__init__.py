@@ -26,17 +26,24 @@ from inferno.tools.base import (
     ToolExample,
     ToolResult,
 )
-
 from inferno.tools.decorator import (
     FunctionTool,
     FunctionToolConfig,
-    function_tool,
-    tool,
-    register_function_tool,
-    get_registered_function_tools,
     auto_register_function_tools,
+    function_tool,
+    get_registered_function_tools,
+    register_function_tool,
+    tool,
 )
 
+# Core tools
+from inferno.tools.execute_command import (
+    execute_code,  # Python/script execution
+    execute_command,
+    generic_linux_command,  # Docker-based execution
+)
+from inferno.tools.http import HTTPTool
+from inferno.tools.memory import MemoryTool, MemoryToolWithFallback
 from inferno.tools.registry import (
     AnthropicToolConfig,
     ToolExecutionError,
@@ -48,29 +55,20 @@ from inferno.tools.registry import (
     register_tool,
 )
 
-# Core tools
-from inferno.tools.execute_command import (
-    execute_command,
-    generic_linux_command,  # Docker-based execution
-    execute_code,           # Python/script execution
-)
-from inferno.tools.http import HTTPTool
-from inferno.tools.memory import MemoryTool, MemoryToolWithFallback
-from inferno.tools.think import ThinkTool
-
 # Shell session management
 from inferno.tools.shell_session import (
-    ShellSession,
     SessionEnvironment,
     SessionInfo,
+    ShellSession,
     create_shell_session,
-    list_shell_sessions,
-    get_session_output,
-    terminate_session,
-    terminate_all_sessions,
-    get_session,
     format_sessions_table,
+    get_session,
+    get_session_output,
+    list_shell_sessions,
+    terminate_all_sessions,
+    terminate_session,
 )
+from inferno.tools.think import ThinkTool
 
 __all__ = [
     # Base classes

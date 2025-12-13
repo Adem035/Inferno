@@ -28,7 +28,7 @@ import structlog
 
 if TYPE_CHECKING:
     from anthropic import Anthropic
-    from inferno.tools.advanced.target_profiler import TargetProfile
+
 
 logger = structlog.get_logger(__name__)
 

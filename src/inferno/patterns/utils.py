@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 import structlog
 
 if TYPE_CHECKING:
-    from inferno.patterns.pattern import Pattern, PatternType
-    from inferno.patterns.swarm import Handoff, SwarmAgent
+    from inferno.patterns.pattern import Pattern
 
 logger = structlog.get_logger(__name__)
 
@@ -380,7 +379,7 @@ def dict_to_pattern(data: Dict[str, Any]) -> Pattern:
         ... }
         >>> p = dict_to_pattern(data)
     """
-    from inferno.patterns.pattern import Pattern, ParallelAgentConfig
+    from inferno.patterns.pattern import ParallelAgentConfig, Pattern
 
     pattern_type = data.get("type", "parallel")
 

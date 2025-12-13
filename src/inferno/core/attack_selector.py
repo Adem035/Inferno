@@ -19,7 +19,7 @@ from typing import Any
 
 import structlog
 
-from inferno.core.hint_extractor import Hint, HintPriority, HintType
+from inferno.core.hint_extractor import Hint, HintPriority
 
 logger = structlog.get_logger(__name__)
 

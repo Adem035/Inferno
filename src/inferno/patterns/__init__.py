@@ -27,21 +27,20 @@ Example:
 """
 
 from inferno.patterns.pattern import (
+    ParallelAgentConfig,
     Pattern,
     PatternType,
-    ParallelAgentConfig,
 )
-
 from inferno.patterns.utils import (
-    is_swarm_pattern,
-    handoff,
-    validate_pattern,
-    list_pattern_agents,
-    get_pattern_description,
-    merge_patterns,
     clone_pattern,
-    pattern_to_dict,
     dict_to_pattern,
+    get_pattern_description,
+    handoff,
+    is_swarm_pattern,
+    list_pattern_agents,
+    merge_patterns,
+    pattern_to_dict,
+    validate_pattern,
 )
 
 __all__ = [

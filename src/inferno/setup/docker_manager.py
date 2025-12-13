@@ -11,11 +11,9 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import time
-import os
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import structlog

@@ -16,10 +16,8 @@ from rich.box import DOUBLE, HEAVY, ROUNDED, SIMPLE
 from rich.columns import Columns
 from rich.console import Console, Group, RenderableType
 from rich.layout import Layout
-from rich.live import Live
 from rich.markdown import Markdown
 from rich.markup import escape as rich_escape
-from rich.padding import Padding
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -30,12 +28,9 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 from rich.rule import Rule
-from rich.style import Style
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
-from rich.tree import Tree
-
 
 # Security tool icons - more specific than generic
 TOOL_ICONS = {

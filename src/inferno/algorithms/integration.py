@@ -9,17 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any
 
 import structlog
 
-from inferno.algorithms.base import OutcomeType
-from inferno.algorithms.manager import AlgorithmManager, get_algorithm_manager, AttackRecommendation
-from inferno.algorithms.metrics import (
-    MetricsCollector,
-    SubagentOutcome,
-    TriggerOutcome,
-)
+from inferno.algorithms.manager import AttackRecommendation, get_algorithm_manager
 
 logger = structlog.get_logger(__name__)
 

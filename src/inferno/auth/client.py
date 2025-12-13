@@ -13,11 +13,10 @@ with support for:
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 import structlog
@@ -31,9 +30,7 @@ from tenacity import (
 )
 
 from inferno.auth.credentials import (
-    Credential,
     CredentialManager,
-    CredentialType,
     get_credential_manager,
 )
 from inferno.config.settings import (
@@ -41,11 +38,9 @@ from inferno.config.settings import (
     CODE_EXECUTION_VERSION,
     ModelTier,
     ToolSearchVariant,
-    get_beta_headers,
 )
 
 if TYPE_CHECKING:
-    from anthropic import Stream
     from anthropic.types import MessageParam, ToolParam
 
 logger = structlog.get_logger(__name__)

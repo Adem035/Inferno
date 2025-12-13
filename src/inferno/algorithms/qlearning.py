@@ -18,7 +18,7 @@ from typing import Any
 
 import structlog
 
-from inferno.algorithms.base import AlgorithmState, ReinforcementLearner, OutcomeType
+from inferno.algorithms.base import AlgorithmState, OutcomeType, ReinforcementLearner
 
 logger = structlog.get_logger(__name__)
 

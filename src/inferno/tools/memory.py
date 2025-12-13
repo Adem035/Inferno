@@ -361,7 +361,7 @@ class QdrantConnector:
         Returns:
             List of all documents.
         """
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         client = self._get_client()
 

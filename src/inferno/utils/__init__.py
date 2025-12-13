@@ -5,20 +5,32 @@ This module exports shared utility functions for parsing,
 validation, formatting, HTTP client, and error handling.
 """
 
-from inferno.utils.http_client import (
-    HTTPClientConfig,
-    HTTPResponse,
-    HTTPError,
-    InfernoHTTPClient,
-    get_http_client,
-    close_global_client,
-    http_client,
-)
 from inferno.utils.error_handling import (
-    handle_tool_error,
-    safe_execute,
     ToolError,
     create_error_result,
+    handle_tool_error,
+    safe_execute,
+)
+from inferno.utils.formatting import (
+    format_bytes,
+    format_duration,
+    format_finding,
+    format_findings_table,
+    format_json_pretty,
+    format_markdown_table,
+    format_port_list,
+    format_progress_bar,
+    format_timestamp,
+    truncate_string,
+)
+from inferno.utils.http_client import (
+    HTTPClientConfig,
+    HTTPError,
+    HTTPResponse,
+    InfernoHTTPClient,
+    close_global_client,
+    get_http_client,
+    http_client,
 )
 from inferno.utils.parsing import (
     GenericParser,
@@ -41,18 +53,6 @@ from inferno.utils.validation import (
     validate_port_range,
     validate_target,
     validate_url,
-)
-from inferno.utils.formatting import (
-    format_bytes,
-    format_duration,
-    format_finding,
-    format_findings_table,
-    format_json_pretty,
-    format_markdown_table,
-    format_port_list,
-    format_progress_bar,
-    format_timestamp,
-    truncate_string,
 )
 
 __all__ = [

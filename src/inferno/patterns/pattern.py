@@ -13,7 +13,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 if TYPE_CHECKING:
-    from inferno.swarm.agents import SubAgentConfig
+    pass
 
 
 class PatternType(Enum):

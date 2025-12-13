@@ -10,7 +10,6 @@ Reference: https://en.wikipedia.org/wiki/IDN_homograph_attack
 
 from __future__ import annotations
 
-import re
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum

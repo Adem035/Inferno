@@ -16,8 +16,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 from dataclasses import dataclass, field
-from datetime import datetime
-from functools import wraps
 from typing import (
     Any,
     Callable,
@@ -406,7 +404,7 @@ def get_registered_function_tools() -> List[FunctionTool]:
     return _registered_function_tools.copy()
 
 
-def auto_register_function_tools(registry: "ToolRegistry") -> int:
+def auto_register_function_tools(registry: Any) -> int:
     """
     Auto-register all collected function tools with a registry.
 

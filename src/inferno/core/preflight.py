@@ -8,7 +8,6 @@ problems early.
 
 from __future__ import annotations
 
-import asyncio
 import shutil
 import socket
 from dataclasses import dataclass, field

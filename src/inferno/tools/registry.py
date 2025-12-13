@@ -7,8 +7,6 @@ with support for deferred loading via Tool Search and built-in Anthropic tools.
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -21,7 +19,6 @@ from inferno.config.settings import (
 )
 from inferno.tools.base import (
     BaseTool,
-    CoreTool,
     ToolCallerType,
     ToolCategory,
     ToolResult,

@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 import structlog
 
@@ -34,6 +34,7 @@ from inferno.swarm.message_bus import (
 
 if TYPE_CHECKING:
     from anthropic import AsyncAnthropic
+
     from inferno.tools.registry import ToolRegistry
 
 logger = structlog.get_logger(__name__)

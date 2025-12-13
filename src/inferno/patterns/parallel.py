@@ -22,7 +22,7 @@ from inferno.patterns.pattern import (
 )
 
 if TYPE_CHECKING:
-    from inferno.swarm.agents import SubAgentConfig
+    pass
 
 logger = structlog.get_logger(__name__)
 

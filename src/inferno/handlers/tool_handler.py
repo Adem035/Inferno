@@ -7,7 +7,6 @@ including result parsing, artifact management, and finding extraction.
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path

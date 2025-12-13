@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Callable
 import structlog
 
 if TYPE_CHECKING:
-    from inferno.tools.base import ToolResult
+    pass
 
 logger = structlog.get_logger(__name__)
 

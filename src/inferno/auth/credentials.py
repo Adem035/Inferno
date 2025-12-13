@@ -16,7 +16,6 @@ import json
 import os
 import platform
 import subprocess
-import webbrowser
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone

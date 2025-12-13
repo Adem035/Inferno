@@ -7,7 +7,6 @@ Import from here instead of hardcoding values throughout the codebase.
 
 from __future__ import annotations
 
-
 # =============================================================================
 # TIMEOUT CONSTANTS (in seconds)
 # =============================================================================

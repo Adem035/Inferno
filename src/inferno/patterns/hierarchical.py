@@ -17,7 +17,6 @@ import structlog
 from inferno.patterns.pattern import Pattern, PatternType, hierarchical_pattern
 
 if TYPE_CHECKING:
-    from inferno.swarm.agents import SubAgentConfig
     from inferno.swarm.message_bus import MessageBus
 
 logger = structlog.get_logger(__name__)

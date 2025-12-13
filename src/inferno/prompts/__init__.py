@@ -25,29 +25,28 @@ from inferno.prompts.base import (
 
 # Main prompt engine (primary system)
 from inferno.prompts.engine import (
+    SWARM_ROLE_FILES,
     PromptEngine,
-    get_engine,
-    build_system_prompt,
-    build_report_prompt,
     build_continuation_prompt,
-    get_checkpoint_prompt,
-    detect_context_type,
+    build_coordinator_prompt,
+    build_report_prompt,
     # Swarm agent prompts
     build_swarm_agent_prompt,
-    build_coordinator_prompt,
-    SWARM_ROLE_FILES,
+    build_system_prompt,
+    detect_context_type,
+    get_checkpoint_prompt,
+    get_engine,
 )
 
 # Mako template engine (advanced dynamic prompts)
 from inferno.prompts.mako_engine import (
     MakoPromptEngine,
-    TemplateContext,
     SystemPromptRenderer,
+    TemplateContext,
     create_system_prompt_renderer,
     get_mako_engine,
     render_prompt,
 )
-
 
 __all__ = [
     # Engine-based system (primary)

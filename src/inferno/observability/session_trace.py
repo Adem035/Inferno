@@ -15,8 +15,8 @@ Features:
 
 from __future__ import annotations
 
-import json
 import html
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum

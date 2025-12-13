@@ -16,13 +16,12 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Literal
+from typing import Any
 
 import structlog
 
@@ -552,7 +551,7 @@ class KnowledgeGraph:
             try:
                 query_embedding = self._embed(query)
                 if query_embedding:
-                    from qdrant_client.models import Filter, FieldCondition, MatchValue
+                    from qdrant_client.models import FieldCondition, Filter, MatchValue
 
                     # Build filter conditions
                     must_conditions = []
@@ -806,7 +805,7 @@ class KnowledgeGraph:
             if client:
                 try:
                     if target:
-                        from qdrant_client.models import Filter, FieldCondition, MatchValue
+                        from qdrant_client.models import FieldCondition, Filter, MatchValue
                         client.delete(
                             collection_name=self._collection_name,
                             points_selector=Filter(

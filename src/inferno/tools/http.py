@@ -18,16 +18,15 @@ from urllib.parse import urlparse
 import httpx
 import structlog
 
-from inferno.tools.base import CoreTool, ToolExample, ToolResult
+from inferno.core.differential_analyzer import (
+    ResponseFingerprint,
+    get_differential_analyzer,
+)
 
 # Intelligence extraction for smarter bug finding
 from inferno.core.hint_extractor import HintExtractor, HintPriority
 from inferno.core.response_analyzer import ResponseAnalyzer
-from inferno.core.differential_analyzer import (
-    DifferentialAnalyzer,
-    ResponseFingerprint,
-    get_differential_analyzer,
-)
+from inferno.tools.base import CoreTool, ToolExample, ToolResult
 
 if TYPE_CHECKING:
     from inferno.core.network import NetworkManager
@@ -422,6 +421,9 @@ class HTTPTool(CoreTool):
         )
 
         try:
+            import time
+            request_start_time = time.time()
+
             # Use NetworkManager for coordinated rate limiting and proxy rotation
             if self._use_network_manager:
                 nm = self._get_network_manager()
@@ -446,6 +448,8 @@ class HTTPTool(CoreTool):
                 request_kwargs["timeout"] = client_kwargs["timeout"]
                 request_kwargs["follow_redirects"] = client_kwargs["follow_redirects"]
                 response = await client.request(**request_kwargs)
+
+            elapsed_time = time.time() - request_start_time
 
             # Build response output
             output_parts = [
@@ -696,8 +700,8 @@ class HTTPTool(CoreTool):
                         payload_context = body[:100] if isinstance(body, str) else str(body)[:100]
                     elif json_body:
                         payload_context = str(json_body)[:100]
-                    elif params:
-                        payload_context = str(params)[:100]
+                    elif form_data:
+                        payload_context = str(form_data)[:100]
 
                     diff_result = diff_analyzer.compare(
                         baseline=baseline,
@@ -736,7 +740,7 @@ class HTTPTool(CoreTool):
                     # Store this response as baseline for future comparison
                     # Only store baselines for clean requests (no obvious payloads)
                     has_payload = any(
-                        indicator in str(body or "") + str(json_body or "") + str(params or "")
+                        indicator in str(body or "") + str(json_body or "") + str(form_data or "")
                         for indicator in ["'", '"', "<", ">", "{{", "}}", "SLEEP", "SELECT", "UNION"]
                     )
                     if not has_payload:

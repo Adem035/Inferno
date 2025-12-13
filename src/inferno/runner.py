@@ -23,10 +23,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import os
-import logging
 import uuid
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -46,7 +44,7 @@ from inferno.config.settings import InfernoSettings, ModelTier
 
 if TYPE_CHECKING:
     from anthropic import AsyncAnthropic
-    from anthropic.types import Message, MessageParam, ToolResultBlockParam, ToolUseBlock
+    from anthropic.types import MessageParam
 
 logger = structlog.get_logger(__name__)
 
@@ -819,6 +817,7 @@ class AnthropicModel(Model):
         """Get or create the Anthropic client."""
         if self._client is None:
             from anthropic import AsyncAnthropic
+
             from inferno.auth.credentials import get_credential_manager
 
             cred_manager = get_credential_manager()

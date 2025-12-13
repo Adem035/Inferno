@@ -7,8 +7,6 @@ This module provides CVE lookup capabilities using the NVD API v2.0.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Any
 
 import httpx
 import structlog
