@@ -11,10 +11,11 @@ import asyncio
 import json
 import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import structlog
 
@@ -53,14 +54,14 @@ class BenchmarkConfig:
     verbose: bool = True
 
     # Filtering
-    categories: Optional[List[TaskCategory]] = None  # Filter by category
-    difficulties: Optional[List[TaskDifficulty]] = None  # Filter by difficulty
-    tags: Optional[List[str]] = None  # Filter by tags
+    categories: list[TaskCategory] | None = None  # Filter by category
+    difficulties: list[TaskDifficulty] | None = None  # Filter by difficulty
+    tags: list[str] | None = None  # Filter by tags
 
     # Callbacks
-    on_task_start: Optional[Callable[[str], None]] = None
-    on_task_complete: Optional[Callable[[str, TaskResult], None]] = None
-    on_progress: Optional[Callable[[int, int], None]] = None
+    on_task_start: Callable[[str], None] | None = None
+    on_task_complete: Callable[[str, TaskResult], None] | None = None
+    on_progress: Callable[[int, int], None] | None = None
 
 
 @dataclass
@@ -69,8 +70,8 @@ class BenchmarkSuite:
     suite_id: str
     name: str
     description: str
-    tasks: List[BenchmarkTask] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    tasks: list[BenchmarkTask] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_task(self, task: BenchmarkTask) -> None:
         """Add a task to the suite."""
@@ -79,21 +80,21 @@ class BenchmarkSuite:
     def get_tasks_by_category(
         self,
         category: TaskCategory,
-    ) -> List[BenchmarkTask]:
+    ) -> list[BenchmarkTask]:
         """Get tasks filtered by category."""
         return [t for t in self.tasks if t.category == category]
 
     def get_tasks_by_difficulty(
         self,
         difficulty: TaskDifficulty,
-    ) -> List[BenchmarkTask]:
+    ) -> list[BenchmarkTask]:
         """Get tasks filtered by difficulty."""
         return [t for t in self.tasks if t.difficulty == difficulty]
 
     def get_tasks_by_tags(
         self,
-        tags: List[str],
-    ) -> List[BenchmarkTask]:
+        tags: list[str],
+    ) -> list[BenchmarkTask]:
         """Get tasks that have any of the specified tags."""
         tag_set = set(tags)
         return [t for t in self.tasks if tag_set.intersection(t.tags)]
@@ -106,12 +107,12 @@ class BenchmarkResult:
     suite_id: str
     config: BenchmarkConfig
     metrics: BenchmarkMetrics
-    task_results: Dict[str, TaskResult]
+    task_results: dict[str, TaskResult]
     started_at: datetime
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
+    completed_at: datetime | None = None
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "benchmark_id": self.benchmark_id,
@@ -140,7 +141,7 @@ class BenchmarkResult:
             },
         }
 
-    def save(self, path: Optional[Path] = None) -> Path:
+    def save(self, path: Path | None = None) -> Path:
         """Save results to JSON file."""
         if path is None:
             path = self.config.output_dir / f"benchmark_{self.benchmark_id}.json"
@@ -157,9 +158,9 @@ class TaskValidator:
     def validate(
         self,
         task: BenchmarkTask,
-        findings: List[Dict[str, Any]],
-        flags_captured: List[str] = None,
-    ) -> Tuple[float, int, int, int]:
+        findings: list[dict[str, Any]],
+        flags_captured: list[str] = None,
+    ) -> tuple[float, int, int, int]:
         """
         Validate task results.
 
@@ -209,8 +210,8 @@ class TaskValidator:
     def _validate_findings(
         self,
         validation: TaskValidation,
-        findings: List[Dict[str, Any]],
-    ) -> Tuple[float, int, int, int]:
+        findings: list[dict[str, Any]],
+    ) -> tuple[float, int, int, int]:
         """Validate findings against expected findings."""
         expected = validation.expected_findings
         matched_findings = set()
@@ -247,7 +248,7 @@ class TaskValidator:
 
     def _finding_matches(
         self,
-        finding: Dict[str, Any],
+        finding: dict[str, Any],
         expected: ExpectedFinding,
     ) -> bool:
         """Check if a finding matches an expected finding."""
@@ -287,9 +288,9 @@ class BenchmarkRunner:
     result validation for comprehensive agent evaluation.
     """
 
-    _instance: Optional["BenchmarkRunner"] = None
+    _instance: BenchmarkRunner | None = None
 
-    def __new__(cls) -> "BenchmarkRunner":
+    def __new__(cls) -> BenchmarkRunner:
         """Singleton pattern."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -301,13 +302,13 @@ class BenchmarkRunner:
             return
 
         self._validator = TaskValidator()
-        self._current_run: Optional[BenchmarkResult] = None
+        self._current_run: BenchmarkResult | None = None
         self._initialized = True
 
     async def run_suite(
         self,
         suite: BenchmarkSuite,
-        config: Optional[BenchmarkConfig] = None,
+        config: BenchmarkConfig | None = None,
     ) -> BenchmarkResult:
         """
         Run a benchmark suite.
@@ -346,7 +347,7 @@ class BenchmarkRunner:
             config=config,
             metrics=collector.metrics,
             task_results={},
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
         self._current_run = result
 
@@ -366,7 +367,7 @@ class BenchmarkRunner:
             result.error = str(e)
 
         # Finalize
-        result.completed_at = datetime.now(timezone.utc)
+        result.completed_at = datetime.now(UTC)
         result.metrics = collector.complete_benchmark()
 
         # Save results
@@ -385,9 +386,9 @@ class BenchmarkRunner:
 
     def _filter_tasks(
         self,
-        tasks: List[BenchmarkTask],
+        tasks: list[BenchmarkTask],
         config: BenchmarkConfig,
-    ) -> List[BenchmarkTask]:
+    ) -> list[BenchmarkTask]:
         """Filter tasks based on config criteria."""
         filtered = tasks
 
@@ -405,7 +406,7 @@ class BenchmarkRunner:
 
     async def _run_tasks_sequential(
         self,
-        tasks: List[BenchmarkTask],
+        tasks: list[BenchmarkTask],
         config: BenchmarkConfig,
         collector: MetricsCollector,
         result: BenchmarkResult,
@@ -429,7 +430,7 @@ class BenchmarkRunner:
 
     async def _run_tasks_parallel(
         self,
-        tasks: List[BenchmarkTask],
+        tasks: list[BenchmarkTask],
         config: BenchmarkConfig,
         collector: MetricsCollector,
         result: BenchmarkResult,
@@ -437,7 +438,7 @@ class BenchmarkRunner:
         """Run tasks in parallel with concurrency limit."""
         semaphore = asyncio.Semaphore(config.max_parallel)
 
-        async def run_with_limit(task: BenchmarkTask) -> Tuple[str, TaskResult]:
+        async def run_with_limit(task: BenchmarkTask) -> tuple[str, TaskResult]:
             async with semaphore:
                 return task.task_id, await self._run_single_task(task, config, collector)
 
@@ -474,7 +475,7 @@ class BenchmarkRunner:
         collector.start_task(task.task_id)
         task.status = TaskStatus.RUNNING
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         timeout = task.timeout_seconds or config.timeout_seconds
 
         try:
@@ -484,7 +485,7 @@ class BenchmarkRunner:
                 task, timeout, collector
             )
 
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
 
             # Validate results
             score, correct, fp, expected = self._validator.validate(
@@ -522,8 +523,8 @@ class BenchmarkRunner:
 
             task.status = task_result.status
 
-        except asyncio.TimeoutError:
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        except TimeoutError:
+            duration = (datetime.now(UTC) - start_time).total_seconds()
             task_result = TaskResult(
                 task_id=task.task_id,
                 status=TaskStatus.TIMEOUT,
@@ -539,7 +540,7 @@ class BenchmarkRunner:
             task.status = TaskStatus.TIMEOUT
 
         except Exception as e:
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
             task_result = TaskResult(
                 task_id=task.task_id,
                 status=TaskStatus.FAILED,
@@ -591,7 +592,7 @@ class BenchmarkRunner:
         task: BenchmarkTask,
         timeout: float,
         collector: MetricsCollector,
-    ) -> Tuple[List[Dict[str, Any]], List[str], int, float, int]:
+    ) -> tuple[list[dict[str, Any]], list[str], int, float, int]:
         """
         Execute task with Inferno agent.
 
@@ -640,7 +641,7 @@ class BenchmarkRunner:
     async def run_task(
         self,
         task: BenchmarkTask,
-        config: Optional[BenchmarkConfig] = None,
+        config: BenchmarkConfig | None = None,
     ) -> TaskResult:
         """
         Run a single benchmark task.
@@ -656,7 +657,7 @@ class BenchmarkRunner:
         collector = MetricsCollector()
         return await self._run_single_task(task, config, collector)
 
-    def get_current_progress(self) -> Optional[Dict[str, Any]]:
+    def get_current_progress(self) -> dict[str, Any] | None:
         """Get current benchmark progress."""
         if not self._current_run:
             return None
@@ -691,7 +692,7 @@ def create_web_security_suite() -> BenchmarkSuite:
     return suite
 
 
-def create_ctf_suite(challenges: List[Dict[str, Any]]) -> BenchmarkSuite:
+def create_ctf_suite(challenges: list[dict[str, Any]]) -> BenchmarkSuite:
     """Create a CTF challenge benchmark suite."""
     from inferno.benchmarks.tasks import create_ctf_task
 

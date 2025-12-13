@@ -28,17 +28,17 @@ from inferno.benchmarks.tasks import (
 )
 
 __all__ = [
-    "BenchmarkRunner",
-    "BenchmarkConfig",
-    "BenchmarkResult",
-    "BenchmarkSuite",
-    "get_benchmark_runner",
-    "BenchmarkMetrics",
-    "MetricsCollector",
     "AccuracyMetrics",
-    "PerformanceMetrics",
+    "BenchmarkConfig",
+    "BenchmarkMetrics",
+    "BenchmarkResult",
+    "BenchmarkRunner",
+    "BenchmarkSuite",
     "BenchmarkTask",
+    "MetricsCollector",
+    "PerformanceMetrics",
     "TaskCategory",
     "TaskDifficulty",
     "create_task",
+    "get_benchmark_runner",
 ]

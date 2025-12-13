@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
@@ -95,7 +95,7 @@ class TokenTracker:
     """Tracks token usage across multiple requests."""
 
     requests: list[TokenUsage] = field(default_factory=list)
-    start_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    start_time: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def total(self) -> TokenUsage:

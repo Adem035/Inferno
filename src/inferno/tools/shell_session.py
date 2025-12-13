@@ -21,9 +21,9 @@ import subprocess
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Dict, List, Optional
 
 import structlog
 
@@ -35,11 +35,11 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 # Active sessions keyed by full session ID
-ACTIVE_SESSIONS: Dict[str, "ShellSession"] = {}
+ACTIVE_SESSIONS: dict[str, ShellSession] = {}
 
 # Friendly ID mappings: S1 -> full_id, full_id -> S1
-FRIENDLY_SESSION_MAP: Dict[str, str] = {}
-REVERSE_SESSION_MAP: Dict[str, str] = {}
+FRIENDLY_SESSION_MAP: dict[str, str] = {}
+REVERSE_SESSION_MAP: dict[str, str] = {}
 SESSION_COUNTER: int = 0
 
 
@@ -163,13 +163,13 @@ class ShellSession:
     def __init__(
         self,
         command: str,
-        session_id: Optional[str] = None,
-        container_id: Optional[str] = None,
-        ssh_host: Optional[str] = None,
-        ssh_user: Optional[str] = None,
-        workspace_dir: Optional[str] = None,
+        session_id: str | None = None,
+        container_id: str | None = None,
+        ssh_host: str | None = None,
+        ssh_user: str | None = None,
+        workspace_dir: str | None = None,
         idle_timeout: float = 300.0,
-        on_output: Optional[Callable[[str], None]] = None,
+        on_output: Callable[[str], None] | None = None,
     ) -> None:
         """
         Initialize a shell session.
@@ -185,7 +185,7 @@ class ShellSession:
             on_output: Optional callback for streaming output
         """
         self.session_id = session_id or str(uuid.uuid4())[:8]
-        self.friendly_id: Optional[str] = None
+        self.friendly_id: str | None = None
         self.command = command
         self.container_id = container_id
         self.ssh_host = ssh_host
@@ -205,9 +205,9 @@ class ShellSession:
             self.workspace_dir = workspace_dir or get_workspace_dir()
 
         # Process and PTY handles
-        self.process: Optional[subprocess.Popen] = None
-        self.master_fd: Optional[int] = None
-        self.slave_fd: Optional[int] = None
+        self.process: subprocess.Popen | None = None
+        self.master_fd: int | None = None
+        self.slave_fd: int | None = None
 
         # State tracking
         self.created_at = time.time()
@@ -216,9 +216,9 @@ class ShellSession:
         self.is_idle = False
 
         # Output management
-        self.output_buffer: List[str] = []
+        self.output_buffer: list[str] = []
         self._output_position: int = 0
-        self._read_thread: Optional[threading.Thread] = None
+        self._read_thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
         logger.debug(
@@ -228,7 +228,7 @@ class ShellSession:
             environment=self.environment.value
         )
 
-    def start(self) -> Optional[str]:
+    def start(self) -> str | None:
         """
         Start the shell session.
 
@@ -242,7 +242,7 @@ class ShellSession:
         else:
             return self._start_local()
 
-    def _start_local(self) -> Optional[str]:
+    def _start_local(self) -> str | None:
         """Start a local PTY session."""
         try:
             self.master_fd, self.slave_fd = pty.openpty()
@@ -286,7 +286,7 @@ class ShellSession:
             logger.error("session_start_failed", error=str(e))
             return error_msg
 
-    def _start_in_container(self) -> Optional[str]:
+    def _start_in_container(self) -> str | None:
         """Start a session inside a Docker container."""
         try:
             self.master_fd, self.slave_fd = pty.openpty()
@@ -336,7 +336,7 @@ class ShellSession:
             logger.error("session_start_failed_container", error=str(e))
             return error_msg
 
-    def _start_via_ssh(self) -> Optional[str]:
+    def _start_via_ssh(self) -> str | None:
         """Start a session via SSH."""
         try:
             self.master_fd, self.slave_fd = pty.openpty()
@@ -657,12 +657,12 @@ class ShellSession:
 
 def create_shell_session(
     command: str,
-    container_id: Optional[str] = None,
-    ssh_host: Optional[str] = None,
-    ssh_user: Optional[str] = None,
-    workspace_dir: Optional[str] = None,
+    container_id: str | None = None,
+    ssh_host: str | None = None,
+    ssh_user: str | None = None,
+    workspace_dir: str | None = None,
     idle_timeout: float = 300.0,
-    on_output: Optional[Callable[[str], None]] = None,
+    on_output: Callable[[str], None] | None = None,
 ) -> str:
     """
     Create and start a new shell session.
@@ -725,7 +725,7 @@ def create_shell_session(
         return f"Failed: {error_msg}"
 
 
-def list_shell_sessions() -> List[SessionInfo]:
+def list_shell_sessions() -> list[SessionInfo]:
     """
     List all active shell sessions.
 
@@ -752,7 +752,7 @@ def list_shell_sessions() -> List[SessionInfo]:
     return result
 
 
-def resolve_session_id(session_identifier: str) -> Optional[str]:
+def resolve_session_id(session_identifier: str) -> str | None:
     """
     Resolve a session identifier to a full session ID.
 
@@ -803,7 +803,7 @@ def resolve_session_id(session_identifier: str) -> Optional[str]:
         return FRIENDLY_SESSION_MAP[key]
 
     # Partial match on full ID
-    for full_id in ACTIVE_SESSIONS.keys():
+    for full_id in ACTIVE_SESSIONS:
         if full_id.startswith(sid) or sid in full_id:
             return full_id
 
@@ -866,8 +866,7 @@ def terminate_session(session_identifier: str) -> str:
     result = session.terminate()
 
     # Clean up registries
-    if resolved in ACTIVE_SESSIONS:
-        del ACTIVE_SESSIONS[resolved]
+    ACTIVE_SESSIONS.pop(resolved, None)
     friendly = REVERSE_SESSION_MAP.pop(resolved, None)
     if friendly:
         FRIENDLY_SESSION_MAP.pop(friendly, None)
@@ -896,7 +895,7 @@ def terminate_all_sessions() -> str:
     return f"Terminated {count} session(s)"
 
 
-def get_session(session_identifier: str) -> Optional[ShellSession]:
+def get_session(session_identifier: str) -> ShellSession | None:
     """
     Get a session object by identifier.
 

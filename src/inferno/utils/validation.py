@@ -156,7 +156,7 @@ def validate_port_range(port_range: str) -> tuple[bool, str | None]:
             return False, error2
 
         if int(parts[0]) >= int(parts[1]):
-            return False, f"Invalid range: start must be less than end"
+            return False, "Invalid range: start must be less than end"
 
         return True, None
 

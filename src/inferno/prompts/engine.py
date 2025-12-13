@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -299,9 +299,9 @@ class PromptEngine:
 
     def _render_strategic_context(
         self,
-        application_model: Optional[Any],
-        attack_plan: Optional[Any],
-        parameter_analysis: Optional[dict],
+        application_model: Any | None,
+        attack_plan: Any | None,
+        parameter_analysis: dict | None,
     ) -> str:
         """
         Render strategic intelligence context from all available sources.
@@ -345,9 +345,9 @@ class PromptEngine:
         context_type: str = "web",  # web, api, network, cloud, ctf
         include_phases: list[str] | None = None,  # recon, enumeration, exploitation, post_exploit
         # Strategic intelligence parameters
-        application_model: Optional[Any] = None,
-        attack_plan: Optional[Any] = None,
-        parameter_analysis: Optional[dict] = None,
+        application_model: Any | None = None,
+        attack_plan: Any | None = None,
+        parameter_analysis: dict | None = None,
     ) -> str:
         """
         Build a complete system prompt for an operation.
@@ -629,9 +629,9 @@ def build_system_prompt(
     max_steps: int = 100,
     context_type: str = "web",
     include_phases: list[str] | None = None,
-    application_model: Optional[Any] = None,
-    attack_plan: Optional[Any] = None,
-    parameter_analysis: Optional[dict] = None,
+    application_model: Any | None = None,
+    attack_plan: Any | None = None,
+    parameter_analysis: dict | None = None,
 ) -> str:
     """
     Convenience function to build a system prompt.

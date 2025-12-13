@@ -14,10 +14,11 @@ SIMPLIFIED ARCHITECTURE:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import structlog
 from claude_agent_sdk import (
@@ -92,20 +93,22 @@ try:
 except ImportError:
     GUARDRAILS_AVAILABLE = False
 
-# NOTE: Advanced features removed in rebuild:
-# - DiminishingReturnsTracker (deleted)
-# - FlagDetector, CTFPayloadBlaster (deleted)
-# - ChainEnumerator (deleted)
-# - ValidationOrchestrator (deleted)
-# - ApplicationModel, ParameterRoleAnalyzer (deleted)
-# - StrategicPlanner, SwarmCoordinator (deleted)
-# - VulnerabilityScorer, MLScoringEngine (deleted)
-# - QualityGatePipeline (deleted)
-#
-# The new philosophy: Let the LLM use execute_command to run any tool.
+# Strategic planning - generates attack plans before execution
+try:
+    from inferno.agent.strategic_planner import (
+        AttackPlan,
+        StrategicPlanner,
+    )
+    STRATEGIC_PLANNING_AVAILABLE = True
+except ImportError:
+    STRATEGIC_PLANNING_AVAILABLE = False
 
-# Stub types for compatibility
-STRATEGIC_PLANNING_AVAILABLE = False
+# NOTE: Other advanced features removed in rebuild:
+# - DiminishingReturnsTracker, FlagDetector, CTFPayloadBlaster
+# - ChainEnumerator, ValidationOrchestrator
+# - ApplicationModel, ParameterRoleAnalyzer (integrated into StrategicPlanner)
+# - VulnerabilityScorer, MLScoringEngine, QualityGatePipeline
+
 VULNERABILITY_SCORER_AVAILABLE = False
 ML_SCORING_AVAILABLE = False
 QUALITY_GATES_AVAILABLE = False
@@ -303,7 +306,7 @@ class SDKAgentExecutor:
                 logger.warning("guardrail_engine_init_failed", error=str(e))
 
         # Agent ID for tracking
-        self._agent_id: str = f"main_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        self._agent_id: str = f"main_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
 
         # NOTE: Features removed in rebuild - set to None for compatibility
         # These checks are still in the codebase but will be no-ops
@@ -428,7 +431,7 @@ class SDKAgentExecutor:
         self._on_subagent_complete = callback
         return self
 
-    def on_validation(self, callback: Callable[[str, str, int], None]) -> "SDKAgentExecutor":
+    def on_validation(self, callback: Callable[[str, str, int], None]) -> SDKAgentExecutor:
         """Set callback for validation results (finding_title, result, confidence)."""
         self._on_validation = callback
         return self
@@ -1067,7 +1070,7 @@ The system automatically monitors progress and can suggest when to try different
                         return (agent_type, f"Error: {result.error}")
                 except Exception as e:
                     logger.error("recon_agent_failed", agent_type=agent_type, error=str(e))
-                    return (agent_type, f"Error: {str(e)}")
+                    return (agent_type, f"Error: {e!s}")
 
             # Run all recon agents in parallel
             tasks = [run_recon_agent(agent_type, task) for agent_type, task in recon_tasks]
@@ -1089,10 +1092,10 @@ The system automatically monitors progress and can suggest when to try different
 
             # Fire subagent callbacks
             if self._on_subagent_spawn:
-                for agent_type in findings.keys():
+                for agent_type in findings:
                     self._on_subagent_spawn(f"initial_recon_{agent_type}", agent_type)
             if self._on_subagent_complete:
-                for agent_type in findings.keys():
+                for agent_type in findings:
                     self._on_subagent_complete(f"initial_recon_{agent_type}")
 
             logger.info(
@@ -1173,21 +1176,80 @@ The system automatically monitors progress and can suggest when to try different
             parameters=len(self._app_model.parameters),
         )
 
-    def _build_strategic_context(self, attack_plan: Any) -> str:
+    def _build_strategic_context(self, attack_plan: AttackPlan) -> str:
         """
         Build strategic context section for system prompt from attack plan.
 
-        NOTE: Strategic planning was removed in the rebuild. This method is kept
-        as a stub for backwards compatibility but returns empty string.
-
         Args:
-            attack_plan: The generated attack plan (unused).
+            attack_plan: The generated attack plan.
 
         Returns:
-            Empty string - strategic planning disabled.
+            Formatted strategic context string.
         """
-        # Strategic planning removed - let the LLM decide attack priorities
-        return ""
+        sections = []
+
+        sections.append("# STRATEGIC ATTACK PLAN")
+        sections.append(f"\nPlan ID: {attack_plan.plan_id}")
+        sections.append(f"Mode: {attack_plan.mode}")
+        sections.append(f"Total Estimated Tokens: {attack_plan.total_estimated_tokens:,}")
+
+        # High-value targets
+        if attack_plan.high_value_targets:
+            sections.append("\n## High-Value Targets (Priority Testing)")
+            for target in attack_plan.high_value_targets[:5]:
+                sections.append(f"- {target}")
+
+        # Skip list
+        if attack_plan.skip_list:
+            sections.append("\n## Skip These Attacks (Low Probability)")
+            for skip_item in attack_plan.skip_list[:5]:
+                sections.append(f"- {skip_item}")
+
+        # Budget allocation
+        if attack_plan.phases_budget:
+            sections.append("\n## Token Budget Allocation by Phase")
+            for phase, percentage in attack_plan.phases_budget.items():
+                tokens = int(attack_plan.total_estimated_tokens * percentage)
+                sections.append(f"- {phase.title()}: {percentage:.0%} ({tokens:,} tokens)")
+
+        # Top priority steps
+        all_steps = attack_plan.get_all_steps()
+        critical_steps = [s for s in all_steps if s.priority.value == "critical"]
+        high_steps = [s for s in all_steps if s.priority.value == "high"]
+
+        if critical_steps:
+            sections.append("\n## CRITICAL Priority Steps (Execute First)")
+            for step in critical_steps[:3]:
+                sections.append(f"\n### {step.description}")
+                sections.append(f"- **Attack Type**: {step.attack_type.value}")
+                sections.append(f"- **Target**: {step.target}")
+                sections.append(f"- **Rationale**: {step.rationale}")
+                if step.tools_needed:
+                    sections.append(f"- **Tools**: {', '.join(step.tools_needed)}")
+
+        if high_steps:
+            sections.append("\n## HIGH Priority Steps")
+            for step in high_steps[:5]:
+                sections.append(f"- **{step.description}** ({step.attack_type.value}) - {step.rationale[:100]}")
+
+        # Attack chains
+        if attack_plan.attack_chains:
+            sections.append("\n## Recommended Attack Chains")
+            for chain in attack_plan.attack_chains[:3]:
+                sections.append(f"\n### {chain.name} (Impact: {chain.expected_impact})")
+                sections.append(f"**Rationale**: {chain.rationale}")
+                sections.append("**Steps**:")
+                for i, step in enumerate(chain.steps, 1):
+                    sections.append(f"  {i}. {step.description} ({step.attack_type.value})")
+
+        sections.append("\n## Execution Instructions")
+        sections.append("1. **Start with CRITICAL priority steps** - These have highest success probability")
+        sections.append("2. **Track progress** - Mark steps complete using memory_store")
+        sections.append("3. **Follow attack chains** - When you find vulnerabilities, check if they enable chains")
+        sections.append("4. **Stay within budget** - Monitor token usage per phase")
+        sections.append("5. **Skip low-probability attacks** - Focus on high-value targets identified in plan")
+
+        return "\n".join(sections)
 
     async def _handle_finding(self, finding: dict[str, Any]) -> None:
         """
@@ -1230,7 +1292,7 @@ The system automatically monitors progress and can suggest when to try different
         Returns:
             ExecutionResult with assessment outcome.
         """
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
         operation_id = f"OP_{started_at.strftime('%Y%m%d_%H%M%S')}"
 
         # Create output directory with sanitized target name
@@ -1379,9 +1441,49 @@ The system automatically monitors progress and can suggest when to try different
         if config.enable_strategic_planning and STRATEGIC_PLANNING_AVAILABLE:
             logger.info("strategic_planning_phase_starting")
 
-            # Strategic planning was removed in rebuild - the LLM decides attack priorities
-            # This block is disabled via STRATEGIC_PLANNING_AVAILABLE = False
-            logger.info("strategic_planning_disabled", reason="Feature removed in rebuild")
+            try:
+                # Get API key for planner
+                planner_api_key = None
+                if self._settings and self._settings.anthropic_api_key:
+                    planner_api_key = self._settings.anthropic_api_key.get_secret_value()
+                if not planner_api_key:
+                    import os
+                    planner_api_key = os.environ.get("ANTHROPIC_API_KEY")
+
+                if planner_api_key:
+                    from anthropic import Anthropic
+                    planner_client = Anthropic(api_key=planner_api_key)
+                    planner = StrategicPlanner(
+                        client=planner_client,
+                        operation_dir=artifacts_dir,
+                    )
+
+                    # Generate attack plan
+                    attack_plan = await planner.create_plan(
+                        target=config.target,
+                        objective=config.objective,
+                        mode=config.persona,
+                        max_tokens=config.max_turns * 2000,  # Rough estimate
+                    )
+
+                    logger.info(
+                        "strategic_plan_created",
+                        plan_id=attack_plan.plan_id,
+                        total_steps=len(attack_plan.get_all_steps()),
+                        critical_steps=len([s for s in attack_plan.get_all_steps() if s.priority.value == "critical"]),
+                        attack_chains=len(attack_plan.attack_chains),
+                    )
+
+                    # Build strategic context for injection into system prompt
+                    strategic_context = self._build_strategic_context(attack_plan)
+                    self._planner = planner
+                else:
+                    logger.warning("strategic_planner_skipped", reason="No API key available")
+
+            except Exception as e:
+                logger.error("strategic_planning_phase_failed", error=str(e))
+                # Continue without strategic planning
+                strategic_context = ""
 
         # Build system prompt and sanitize bracket tags to prevent XML parsing errors
         system_prompt = sanitize_bracket_tags(self._build_system_prompt(config, artifacts_dir))
@@ -2063,7 +2165,7 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                 error=error,
             )
 
-        ended_at = datetime.now(timezone.utc)
+        ended_at = datetime.now(UTC)
         duration = (ended_at - started_at).total_seconds()
 
         # Run pending validations if enabled
@@ -2248,7 +2350,7 @@ Continue the assessment now. Start by recalling memories.""")
         # Quality gates removed in rebuild - let the LLM validate findings
         return None
 
-    def _create_validation_orchestrator(self, config: "AssessmentConfig") -> None:
+    def _create_validation_orchestrator(self, config: AssessmentConfig) -> None:
         """
         Create validation orchestrator with appropriate client.
 
@@ -2257,7 +2359,7 @@ Continue the assessment now. Start by recalling memories.""")
         """
         return None
 
-    async def _run_pending_validations(self, config: "AssessmentConfig") -> list[dict]:
+    async def _run_pending_validations(self, config: AssessmentConfig) -> list[dict]:
         """
         Run validation on all pending findings.
 
@@ -2551,17 +2653,17 @@ class MinimalSDKExecutor:
         from inferno.setup.docker_manager import DockerManager
         self._docker = DockerManager()
 
-    def on_message(self, callback: Callable[[str], None]) -> "MinimalSDKExecutor":
+    def on_message(self, callback: Callable[[str], None]) -> MinimalSDKExecutor:
         """Set callback for assistant messages."""
         self._on_message = callback
         return self
 
-    def on_tool_call(self, callback: Callable[[str, dict], None]) -> "MinimalSDKExecutor":
+    def on_tool_call(self, callback: Callable[[str, dict], None]) -> MinimalSDKExecutor:
         """Set callback for tool calls."""
         self._on_tool_call = callback
         return self
 
-    def on_tool_result(self, callback: Callable[[str, str, bool], None]) -> "MinimalSDKExecutor":
+    def on_tool_result(self, callback: Callable[[str, str, bool], None]) -> MinimalSDKExecutor:
         """Set callback for tool results."""
         self._on_tool_result = callback
         return self
@@ -2578,7 +2680,7 @@ class MinimalSDKExecutor:
         """
         from inferno.agent.prompts import build_minimal_prompt
 
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
         operation_id = f"MIN_{started_at.strftime('%Y%m%d_%H%M%S')}"
 
         logger.info(
@@ -2602,7 +2704,7 @@ class MinimalSDKExecutor:
                 duration_seconds=0.0,
                 artifacts_dir="/workspace",
                 started_at=started_at,
-                ended_at=datetime.now(timezone.utc),
+                ended_at=datetime.now(UTC),
                 error="Failed to start Kali container",
             )
 
@@ -2763,7 +2865,7 @@ class MinimalSDKExecutor:
             stop_reason = "error"
             logger.error("minimal_assessment_failed", error=error)
 
-        ended_at = datetime.now(timezone.utc)
+        ended_at = datetime.now(UTC)
         duration = (ended_at - started_at).total_seconds()
 
         logger.info(

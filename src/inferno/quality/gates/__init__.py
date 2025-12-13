@@ -41,11 +41,11 @@ from inferno.quality.gates.technology import TechnologyContextGate
 from inferno.quality.gates.validation import ValidationGate, create_validation_gate
 
 __all__ = [
+    "EscalationGate",
+    "PreReportChecklistGate",
+    "SeverityGate",
     "SoWhatGate",
     "TechnologyContextGate",
-    "EscalationGate",
-    "SeverityGate",
-    "PreReportChecklistGate",
     "ValidationGate",
     "create_validation_gate",
 ]

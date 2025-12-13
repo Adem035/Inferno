@@ -133,6 +133,51 @@ ignore = [
     "B008",   # do not perform function calls in argument defaults
     "B905",   # zip without explicit strict
     "ARG001", # unused function argument
+    "ARG002", # unused method argument (common in base classes/interfaces)
+    "ARG003", # unused class method argument
+    "ARG004", # unused static method argument
+    "ARG005", # unused lambda argument
+    "SIM102", # nested if (sometimes clearer)
+    "SIM103", # return condition directly (sometimes less clear)
+    "SIM105", # contextlib.suppress (try/except/pass is clearer)
+    "SIM108", # ternary operator (sometimes less readable)
+    "SIM110", # any() comprehension (explicit loop clearer)
+    "SIM113", # enumerate for index (stylistic)
+    "SIM118", # key in dict (stylistic)
+    "SIM401", # dict.get with default (stylistic)
+    "RUF001", # ambiguous unicode (intentional in security code)
+    "RUF002", # ambiguous unicode in docstring
+    "RUF003", # ambiguous unicode in comment
+    "RUF005", # list concatenation (stylistic)
+    "RUF006", # asyncio task reference (not always needed)
+    "RUF012", # mutable class attributes (dataclasses handle this)
+    "RUF015", # next(iter()) (stylistic)
+    "RUF022", # __all__ not sorted (order matters semantically)
+    "RUF034", # useless if-else (sometimes clearer)
+    "RUF059", # unused unpacked variable
+    "TC001",  # type-checking imports (not critical)
+    "TC002",  # third-party type-checking imports
+    "TC003",  # stdlib type-checking imports (not critical)
+    "PTH100", # Path.resolve() (stylistic)
+    "PTH103", # Path.mkdir() (stylistic)
+    "PTH107", # Path.unlink() (stylistic)
+    "PTH110", # Path.exists() (stylistic)
+    "PTH111", # Path.expanduser() (stylistic)
+    "PTH112", # Path.is_dir() (stylistic)
+    "PTH113", # Path.is_file() (stylistic)
+    "PTH118", # Path / operator (stylistic)
+    "PTH123", # Path.open() (stylistic)
+    "PTH109", # Path.cwd() (stylistic)
+    "PTH202", # Path.stat().st_size (stylistic)
+    "PTH208", # Path.iterdir() (stylistic)
+    "ERA001", # commented-out code (useful for documentation)
+    "RUF013", # implicit Optional (legacy code)
+    "B007",   # loop variable not used (sometimes intentional)
+    "B904",   # raise from (not always needed)
+    "C401",   # set comprehension (generator clearer sometimes)
+    "E741",   # ambiguous variable name (l is clear in context)
+    "UP028",  # yield from (explicit yield clearer)
+    "F841",   # unused variable (sometimes intentional for readability)
 ]
 
 [tool.ruff.lint.isort]

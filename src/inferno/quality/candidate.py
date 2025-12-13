@@ -9,7 +9,7 @@ data at each stage.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from inferno.reporting.models import Severity
@@ -19,7 +19,7 @@ from inferno.reporting.models import Severity
 class EscalationAttempt:
     """Record of a single escalation attempt."""
 
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     method: str = ""  # e.g., "privilege_escalation", "horizontal_movement", "data_exfiltration"
     description: str = ""
     payload: str = ""
@@ -45,7 +45,7 @@ class EscalationAttempt:
         return cls(
             timestamp=datetime.fromisoformat(data["timestamp"])
             if "timestamp" in data
-            else datetime.now(timezone.utc),
+            else datetime.now(UTC),
             method=data.get("method", ""),
             description=data.get("description", ""),
             payload=data.get("payload", ""),
@@ -59,7 +59,7 @@ class EscalationAttempt:
 class EscalationSuccess:
     """Record of a successful escalation."""
 
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     from_finding: str = ""  # Original finding that was escalated
     to_finding: str = ""  # New finding discovered through escalation
     method: str = ""
@@ -85,7 +85,7 @@ class EscalationSuccess:
         return cls(
             timestamp=datetime.fromisoformat(data["timestamp"])
             if "timestamp" in data
-            else datetime.now(timezone.utc),
+            else datetime.now(UTC),
             from_finding=data.get("from_finding", ""),
             to_finding=data.get("to_finding", ""),
             method=data.get("method", ""),
@@ -180,7 +180,7 @@ class FindingCandidate:
     gates_failed: list[str] = field(default_factory=list)
 
     # Metadata
-    discovered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    discovered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     validated_at: datetime | None = None
 
     @property
@@ -236,13 +236,13 @@ class FindingCandidate:
         """Approve finding for report inclusion."""
         self.approved_for_report = True
         self.quality_score = quality_score
-        self.validated_at = datetime.now(timezone.utc)
+        self.validated_at = datetime.now(UTC)
 
     def reject(self, reason: str) -> None:
         """Reject finding from report."""
         self.approved_for_report = False
         self.add_rejection_reason(reason)
-        self.validated_at = datetime.now(timezone.utc)
+        self.validated_at = datetime.now(UTC)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -319,7 +319,7 @@ class FindingCandidate:
             gates_failed=data.get("gates_failed", []),
             discovered_at=datetime.fromisoformat(data["discovered_at"])
             if "discovered_at" in data
-            else datetime.now(timezone.utc),
+            else datetime.now(UTC),
             validated_at=datetime.fromisoformat(data["validated_at"])
             if data.get("validated_at")
             else None,

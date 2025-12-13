@@ -8,7 +8,7 @@ with the existing agent infrastructure.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -129,7 +129,7 @@ class LoopIntegration:
             "agent_type": selected_agent,
             "context": context,
         }
-        self._spawn_start_time = datetime.now(timezone.utc)
+        self._spawn_start_time = datetime.now(UTC)
 
         return SpawnDecision(
             should_spawn=True,

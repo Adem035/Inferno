@@ -13,12 +13,9 @@ import shutil
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import structlog
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -586,7 +583,7 @@ class ToolInstaller:
                     message=f"Failed to install {tool}: {error_msg}",
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("tool_install_timeout", tool=tool)
             return InstallResult(
                 tool=tool,

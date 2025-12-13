@@ -18,11 +18,12 @@ Communication:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -149,7 +150,7 @@ class WorkerTask:
     context: dict[str, Any] = field(default_factory=dict)
     priority: int = 50  # 0-100, higher = more important
     max_turns: int = 30
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
     status: str = "pending"
@@ -176,7 +177,7 @@ class Finding:
     validation_notes: str = ""
     poc: str | None = None
     cvss_score: float | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     validated_at: datetime | None = None
 
 
@@ -294,8 +295,8 @@ class MetaCoordinator:
         artifacts_dir: Path | None = None,
         model: str = "claude-opus-4-5-20251101",
         # Legacy params (ignored, kept for backwards compatibility)
-        client: "AsyncAnthropic | None" = None,
-        registry: "ToolRegistry | None" = None,
+        client: AsyncAnthropic | None = None,
+        registry: ToolRegistry | None = None,
     ) -> None:
         """
         Initialize the MetaCoordinator.
@@ -383,27 +384,27 @@ class MetaCoordinator:
     # Callback setters
     # -------------------------------------------------------------------------
 
-    def on_phase_change(self, callback: Callable[[AssessmentPhase], None]) -> "MetaCoordinator":
+    def on_phase_change(self, callback: Callable[[AssessmentPhase], None]) -> MetaCoordinator:
         """Set callback for phase changes."""
         self._on_phase_change = callback
         return self
 
-    def on_worker_spawn(self, callback: Callable[[str, WorkerType], None]) -> "MetaCoordinator":
+    def on_worker_spawn(self, callback: Callable[[str, WorkerType], None]) -> MetaCoordinator:
         """Set callback for worker spawning."""
         self._on_worker_spawn = callback
         return self
 
-    def on_worker_complete(self, callback: Callable[[str, WorkerTask], None]) -> "MetaCoordinator":
+    def on_worker_complete(self, callback: Callable[[str, WorkerTask], None]) -> MetaCoordinator:
         """Set callback for worker completion."""
         self._on_worker_complete = callback
         return self
 
-    def on_finding(self, callback: Callable[[Finding], None]) -> "MetaCoordinator":
+    def on_finding(self, callback: Callable[[Finding], None]) -> MetaCoordinator:
         """Set callback for new findings."""
         self._on_finding = callback
         return self
 
-    def on_validation(self, callback: Callable[[Finding, FindingStatus], None]) -> "MetaCoordinator":
+    def on_validation(self, callback: Callable[[Finding, FindingStatus], None]) -> MetaCoordinator:
         """Set callback for finding validation."""
         self._on_validation = callback
         return self
@@ -501,7 +502,7 @@ class MetaCoordinator:
 
         # Update task state
         task.status = "running"
-        task.started_at = datetime.now(timezone.utc)
+        task.started_at = datetime.now(UTC)
         self._state.active_tasks[task.task_id] = task
 
         # Create swarm tool instance (uses Claude SDK internally - OAuth compatible)
@@ -548,7 +549,7 @@ Use the memory tool to share findings, endpoints, and attack vectors."""
             )
 
             # Update task with result
-            task.completed_at = datetime.now(timezone.utc)
+            task.completed_at = datetime.now(UTC)
             task.result = result.output
             task.status = "completed" if result.success else "failed"
 
@@ -567,7 +568,7 @@ Use the memory tool to share findings, endpoints, and attack vectors."""
             )
 
         except Exception as e:
-            task.completed_at = datetime.now(timezone.utc)
+            task.completed_at = datetime.now(UTC)
             task.status = "failed"
             task.error = str(e)
             logger.error(
@@ -1201,7 +1202,7 @@ Format the report professionally with clear reproduction steps.""",
             max_workers=max_workers,
         )
 
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
 
         try:
             # Phase 1: Planning and initial reconnaissance
@@ -1242,7 +1243,7 @@ Format the report professionally with clear reproduction steps.""",
             logger.error("assessment_failed", error=str(e))
             raise
 
-        ended_at = datetime.now(timezone.utc)
+        ended_at = datetime.now(UTC)
         duration = (ended_at - started_at).total_seconds()
 
         # Build results
@@ -1361,7 +1362,7 @@ Format the report professionally with clear reproduction steps.""",
                     finding.status = FindingStatus.NEEDS_MORE_INFO
                     finding.confidence = 50
 
-                finding.validated_at = datetime.now(timezone.utc)
+                finding.validated_at = datetime.now(UTC)
                 finding.validation_notes = task.result or ""
 
                 logger.info(

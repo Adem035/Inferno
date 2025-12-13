@@ -9,8 +9,8 @@ from inferno.reporting.generator import ReportGenerator
 from inferno.reporting.models import Finding, Report, Severity
 
 __all__ = [
-    "ReportGenerator",
     "Finding",
     "Report",
+    "ReportGenerator",
     "Severity",
 ]

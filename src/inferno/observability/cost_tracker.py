@@ -13,10 +13,11 @@ Usage:
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -34,7 +35,7 @@ class ModelTier(str, Enum):
 
 
 # Pricing per 1M tokens (input, output) in USD
-MODEL_PRICING: Dict[str, tuple[float, float]] = {
+MODEL_PRICING: dict[str, tuple[float, float]] = {
     # Anthropic Models
     "claude-opus-4-5-20251101": (15.0, 75.0),
     "claude-sonnet-4-5-20250514": (3.0, 15.0),
@@ -66,10 +67,10 @@ class CostMetrics:
     cache_write_tokens: int = 0
     total_cost_usd: float = 0.0
     call_count: int = 0
-    first_call: Optional[datetime] = None
-    last_call: Optional[datetime] = None
+    first_call: datetime | None = None
+    last_call: datetime | None = None
 
-    def add(self, other: "CostMetrics") -> None:
+    def add(self, other: CostMetrics) -> None:
         """Add another metrics instance to this one."""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
@@ -85,7 +86,7 @@ class CostMetrics:
             if self.last_call is None or other.last_call > self.last_call:
                 self.last_call = other.last_call
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "input_tokens": self.input_tokens,
@@ -146,7 +147,7 @@ class CostAlert:
     current_cost_usd: float
     entity_type: str  # "global", "agent", "tool"
     entity_id: str
-    triggered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    triggered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class CostTracker:
@@ -157,10 +158,10 @@ class CostTracker:
     Supports cost limits with callbacks for alerting.
     """
 
-    _instance: Optional["CostTracker"] = None
+    _instance: CostTracker | None = None
     _lock = threading.Lock()
 
-    def __new__(cls) -> "CostTracker":
+    def __new__(cls) -> CostTracker:
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
@@ -170,19 +171,19 @@ class CostTracker:
     def _initialize(self) -> None:
         """Initialize the tracker state."""
         self._global = CostMetrics()
-        self._by_agent: Dict[str, CostMetrics] = {}
-        self._by_tool: Dict[str, Dict[str, CostMetrics]] = {}  # agent_id -> {tool_name -> metrics}
-        self._by_model: Dict[str, CostMetrics] = {}
-        self._operation_id: Optional[str] = None
-        self._started_at: Optional[datetime] = None
+        self._by_agent: dict[str, CostMetrics] = {}
+        self._by_tool: dict[str, dict[str, CostMetrics]] = {}  # agent_id -> {tool_name -> metrics}
+        self._by_model: dict[str, CostMetrics] = {}
+        self._operation_id: str | None = None
+        self._started_at: datetime | None = None
 
         # Cost limits and callbacks
-        self._global_limit_usd: Optional[float] = None
-        self._agent_limit_usd: Optional[float] = None
-        self._on_limit_exceeded: Optional[Callable[[CostAlert], None]] = None
+        self._global_limit_usd: float | None = None
+        self._agent_limit_usd: float | None = None
+        self._on_limit_exceeded: Callable[[CostAlert], None] | None = None
 
         # Alert history
-        self._alerts: List[CostAlert] = []
+        self._alerts: list[CostAlert] = []
 
         self._data_lock = threading.Lock()
 
@@ -194,7 +195,7 @@ class CostTracker:
             self._by_tool.clear()
             self._by_model.clear()
             self._alerts.clear()
-            self._started_at = datetime.now(timezone.utc)
+            self._started_at = datetime.now(UTC)
 
     def set_operation(self, operation_id: str) -> None:
         """Set the current operation ID and reset tracking."""
@@ -203,9 +204,9 @@ class CostTracker:
 
     def set_limits(
         self,
-        global_limit_usd: Optional[float] = None,
-        agent_limit_usd: Optional[float] = None,
-        on_limit_exceeded: Optional[Callable[[CostAlert], None]] = None,
+        global_limit_usd: float | None = None,
+        agent_limit_usd: float | None = None,
+        on_limit_exceeded: Callable[[CostAlert], None] | None = None,
     ) -> None:
         """
         Set cost limits and alert callback.
@@ -250,7 +251,7 @@ class CostTracker:
             cache_write_tokens=cache_write_tokens,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         metrics = CostMetrics(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -376,7 +377,7 @@ class CostTracker:
                 return self._by_tool[agent_id][tool_name].total_cost_usd
             return 0.0
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """
         Get comprehensive cost summary at all levels.
 
@@ -415,7 +416,7 @@ class CostTracker:
                 ],
             }
 
-    def get_top_tools_by_cost(self, limit: int = 10) -> List[tuple[str, str, float]]:
+    def get_top_tools_by_cost(self, limit: int = 10) -> list[tuple[str, str, float]]:
         """
         Get tools with highest cost.
 
@@ -431,7 +432,7 @@ class CostTracker:
         tool_costs.sort(key=lambda x: x[2], reverse=True)
         return tool_costs[:limit]
 
-    def get_efficiency_metrics(self) -> Dict[str, Any]:
+    def get_efficiency_metrics(self) -> dict[str, Any]:
         """
         Get efficiency metrics like cost per finding, tokens per turn.
 

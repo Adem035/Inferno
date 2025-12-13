@@ -157,7 +157,7 @@ class VerticalEscalation(BaseEscalationStrategy):
                 description=f"Vertical escalation: accessed {len(accessible_endpoints)} admin endpoint(s)",
                 target=base_url,
                 result=EscalationResult.SUCCESS,
-                evidence=f"Accessible admin endpoints:\n"
+                evidence="Accessible admin endpoints:\n"
                 + "\n".join(f"- {base_url}{ep}" for ep in accessible_endpoints),
                 token_tested=credentials.get("token") if credentials else None,
             )

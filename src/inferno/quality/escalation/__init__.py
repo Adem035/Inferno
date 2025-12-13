@@ -17,11 +17,11 @@ from inferno.quality.escalation.vertical import VerticalEscalation
 
 __all__ = [
     "BaseEscalationStrategy",
+    "ChainingStrategy",
     "EscalationAttempt",
     "EscalationResult",
     "FindingCandidate",
     "HorizontalEscalation",
-    "VerticalEscalation",
-    "ChainingStrategy",
     "PermissionTestingStrategy",
+    "VerticalEscalation",
 ]

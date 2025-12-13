@@ -21,7 +21,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -115,7 +115,7 @@ class ProxyConfig:
         self.total_requests += 1
         self.failure_count = 0
         self.is_healthy = True
-        self.last_used = datetime.now(timezone.utc)
+        self.last_used = datetime.now(UTC)
         # Rolling average latency
         self.avg_latency_ms = (
             (self.avg_latency_ms * (self.total_requests - 1) + latency_ms)
@@ -126,7 +126,7 @@ class ProxyConfig:
         """Record a failed request."""
         self.failure_count += 1
         self.total_requests += 1
-        self.last_used = datetime.now(timezone.utc)
+        self.last_used = datetime.now(UTC)
         # Mark unhealthy after 3 consecutive failures
         if self.failure_count >= 3:
             self.is_healthy = False

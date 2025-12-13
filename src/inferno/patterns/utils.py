@@ -7,7 +7,7 @@ and integration with the Inferno execution system.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -84,8 +84,8 @@ def is_swarm_pattern(agent: Any) -> bool:
 
 def handoff(
     agent: Any,
-    tool_description_override: Optional[str] = None,
-    condition: Optional[Any] = None,
+    tool_description_override: str | None = None,
+    condition: Any | None = None,
 ) -> Any:
     """
     Create a handoff to another agent.
@@ -123,7 +123,7 @@ def handoff(
     )
 
 
-def validate_pattern(pattern: Pattern) -> List[str]:
+def validate_pattern(pattern: Pattern) -> list[str]:
     """
     Validate a pattern and return any issues found.
 
@@ -142,7 +142,7 @@ def validate_pattern(pattern: Pattern) -> List[str]:
     """
     from inferno.patterns.pattern import PatternType
 
-    errors: List[str] = []
+    errors: list[str] = []
 
     if not pattern.name:
         errors.append("Pattern name is required")
@@ -175,7 +175,7 @@ def validate_pattern(pattern: Pattern) -> List[str]:
     return errors
 
 
-def list_pattern_agents(pattern: Union[Pattern, str]) -> List[str]:
+def list_pattern_agents(pattern: Pattern | str) -> list[str]:
     """
     Get a list of agent names from a pattern.
 
@@ -204,10 +204,7 @@ def list_pattern_agents(pattern: Union[Pattern, str]) -> List[str]:
     if pattern.type == PatternType.PARALLEL:
         return [config.agent_name for config in pattern.configs]
 
-    elif pattern.type == PatternType.SWARM:
-        return [getattr(agent, "name", str(agent)) for agent in pattern.agents]
-
-    elif pattern.type == PatternType.HIERARCHICAL:
+    elif pattern.type == PatternType.SWARM or pattern.type == PatternType.HIERARCHICAL:
         return [getattr(agent, "name", str(agent)) for agent in pattern.agents]
 
     elif pattern.type == PatternType.SEQUENTIAL:
@@ -268,7 +265,7 @@ def get_pattern_description(pattern: Pattern) -> str:
 
 def merge_patterns(
     name: str,
-    patterns: List[Pattern],
+    patterns: list[Pattern],
     description: str = "",
 ) -> Pattern:
     """
@@ -348,7 +345,7 @@ def clone_pattern(pattern: Pattern, new_name: str) -> Pattern:
     )
 
 
-def pattern_to_dict(pattern: Pattern) -> Dict[str, Any]:
+def pattern_to_dict(pattern: Pattern) -> dict[str, Any]:
     """
     Convert a pattern to a serializable dictionary.
 
@@ -361,7 +358,7 @@ def pattern_to_dict(pattern: Pattern) -> Dict[str, Any]:
     return pattern.to_dict()
 
 
-def dict_to_pattern(data: Dict[str, Any]) -> Pattern:
+def dict_to_pattern(data: dict[str, Any]) -> Pattern:
     """
     Create a pattern from a dictionary.
 

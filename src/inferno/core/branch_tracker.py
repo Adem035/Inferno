@@ -20,7 +20,7 @@ import hashlib
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -121,7 +121,7 @@ class BranchPoint:
     decision_type: DecisionType
     context: str  # What led to this decision point
     options: list[BranchOption] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     parent_branch_id: str | None = None  # For nested decisions
     depth: int = 0  # Depth in decision tree
 
@@ -186,7 +186,7 @@ class ResponsePatternTracker:
         response_data = {
             "status_code": status_code,
             "response_length": response_length,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "waf_detected": waf_detected,
         }
         self._response_history[branch_id].append(response_data)
@@ -500,7 +500,7 @@ class BranchTracker:
 
         # Mark as exploring
         option.status = BranchStatus.EXPLORING
-        option.explored_at = datetime.now(timezone.utc).isoformat()
+        option.explored_at = datetime.now(UTC).isoformat()
         self._current_branch_id = branch_id
         self._branch_stack.append(branch_id)
         self._visited_states.add(state_hash)
@@ -1029,7 +1029,7 @@ class BranchTracker:
 
     def _generate_branch_id(self, decision_type: DecisionType, context: str) -> str:
         """Generate a unique branch ID."""
-        content = f"{decision_type.value}:{context}:{datetime.now(timezone.utc).isoformat()}"
+        content = f"{decision_type.value}:{context}:{datetime.now(UTC).isoformat()}"
         return f"branch_{hashlib.md5(content.encode()).hexdigest()[:12]}"
 
     def _compute_state_hash(self, branch_id: str, option_id: str) -> str:

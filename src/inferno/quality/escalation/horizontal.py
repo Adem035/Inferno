@@ -121,7 +121,7 @@ class HorizontalEscalation(BaseEscalationStrategy):
             if result.success and result.data.get("vulnerable"):
                 findings = result.data.get("findings", [])
                 if findings:
-                    evidence_parts = [f"IDOR Scanner Results:"]
+                    evidence_parts = ["IDOR Scanner Results:"]
                     for finding in findings:
                         evidence_parts.append(
                             f"- ID {finding['test_id']}: {finding['status']}"

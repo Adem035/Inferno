@@ -18,15 +18,12 @@ import platform
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlencode
 
 import structlog
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -76,7 +73,7 @@ class Credential:
         """Check if the credential is expired."""
         if self.expires_at is None:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     @property
     def is_oauth(self) -> bool:
@@ -89,7 +86,7 @@ class Credential:
         if not self.is_oauth or self.expires_at is None:
             return False
         buffer = timedelta(minutes=5)
-        return datetime.now(timezone.utc) + buffer > self.expires_at
+        return datetime.now(UTC) + buffer > self.expires_at
 
     def get_value(self) -> str:
         """Get the credential value, raising if expired."""
@@ -187,7 +184,7 @@ class EnvironmentCredentialProvider(CredentialProvider):
         credential = Credential(
             value=value,
             source=self.name,
-            loaded_at=datetime.now(timezone.utc),
+            loaded_at=datetime.now(UTC),
         )
 
         if not self.validate_credential(credential):
@@ -267,7 +264,7 @@ class FileCredentialProvider(CredentialProvider):
         credential = Credential(
             value=data[self._key_field],
             source=self.name,
-            loaded_at=datetime.now(timezone.utc),
+            loaded_at=datetime.now(UTC),
             expires_at=expires_at,
             metadata={k: v for k, v in data.items() if k not in (self._key_field, "expires_at")},
         )
@@ -374,7 +371,7 @@ class OAuthCredentialProvider(CredentialProvider):
         return Credential(
             value=data["access_token"],
             source=self.name,
-            loaded_at=datetime.now(timezone.utc),
+            loaded_at=datetime.now(UTC),
             credential_type=CredentialType.OAUTH_TOKEN,
             expires_at=expires_at,
             refresh_token=data.get("refresh_token"),
@@ -424,7 +421,7 @@ class OAuthCredentialProvider(CredentialProvider):
 
             # Calculate expiration
             expires_in = token_data.get("expires_in", 3600)
-            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+            expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
             # Save refreshed token
             self._save_token(token_data, expires_at)
@@ -432,7 +429,7 @@ class OAuthCredentialProvider(CredentialProvider):
             return Credential(
                 value=token_data["access_token"],
                 source=self.name,
-                loaded_at=datetime.now(timezone.utc),
+                loaded_at=datetime.now(UTC),
                 credential_type=CredentialType.OAUTH_TOKEN,
                 expires_at=expires_at,
                 refresh_token=token_data.get("refresh_token", refresh_token),
@@ -519,7 +516,7 @@ class OAuthCredentialProvider(CredentialProvider):
 
             # Calculate expiration
             expires_in = token_data.get("expires_in", 3600)
-            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+            expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
             # Save token
             self._save_token(token_data, expires_at)
@@ -529,7 +526,7 @@ class OAuthCredentialProvider(CredentialProvider):
             return Credential(
                 value=token_data["access_token"],
                 source=self.name,
-                loaded_at=datetime.now(timezone.utc),
+                loaded_at=datetime.now(UTC),
                 credential_type=CredentialType.OAUTH_TOKEN,
                 expires_at=expires_at,
                 refresh_token=token_data.get("refresh_token"),
@@ -602,7 +599,7 @@ class EnvironmentOAuthProvider(CredentialProvider):
                 credential = Credential(
                     value=value.strip(),
                     source=f"env:{env_var}",
-                    loaded_at=datetime.now(timezone.utc),
+                    loaded_at=datetime.now(UTC),
                     credential_type=CredentialType.OAUTH_TOKEN,
                     metadata={"token_type": "Bearer"},
                 )
@@ -728,7 +725,7 @@ class KeychainCredentialProvider(CredentialProvider):
         credential = Credential(
             value=access_token,
             source=self.name,
-            loaded_at=datetime.now(timezone.utc),
+            loaded_at=datetime.now(UTC),
             credential_type=CredentialType.OAUTH_TOKEN,
             expires_at=None,  # Claude Code tokens don't have expiry info stored
             metadata={

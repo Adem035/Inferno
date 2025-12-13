@@ -8,7 +8,7 @@ including result parsing, artifact management, and finding extraction.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ class ToolResultHandler(EventHandler):
         execution_record = {
             "tool": tool_name,
             "success": success,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "output_length": len(output),
         }
         self._execution_history.append(execution_record)
@@ -97,7 +97,7 @@ class ToolResultHandler(EventHandler):
 
         self._artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         filename = f"{tool_name}_{timestamp}.txt"
         artifact_path = self._artifacts_dir / filename
 

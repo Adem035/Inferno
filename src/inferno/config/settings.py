@@ -448,7 +448,7 @@ class OutputConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def resolve_base_dir(self) -> "OutputConfig":
+    def resolve_base_dir(self) -> OutputConfig:
         """Ensure base_dir is an absolute path."""
         if not self.base_dir.is_absolute():
             # Resolve relative paths against current working directory

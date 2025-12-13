@@ -757,17 +757,17 @@ class MinimalPromptBuilder:
         self._objective: str = "Perform security assessment"
         self._context: dict[str, Any] = {}
 
-    def set_target(self, target: str) -> "MinimalPromptBuilder":
+    def set_target(self, target: str) -> MinimalPromptBuilder:
         """Set the target."""
         self._target = target
         return self
 
-    def set_objective(self, objective: str) -> "MinimalPromptBuilder":
+    def set_objective(self, objective: str) -> MinimalPromptBuilder:
         """Set the objective."""
         self._objective = objective
         return self
 
-    def add_context(self, key: str, value: Any) -> "MinimalPromptBuilder":
+    def add_context(self, key: str, value: Any) -> MinimalPromptBuilder:
         """Add optional context."""
         self._context[key] = value
         return self

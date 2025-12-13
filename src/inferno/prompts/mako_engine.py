@@ -20,7 +20,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypeVar
+from typing import Any, TypeVar
 
 import structlog
 
@@ -62,11 +62,11 @@ class TemplateContext:
         max_steps: int = 100,
         context_type: str = "web",
         phase: str = "recon",
-        findings: List[Dict[str, Any]] = None,
-        credentials: List[Dict[str, Any]] = None,
+        findings: list[dict[str, Any]] = None,
+        credentials: list[dict[str, Any]] = None,
         agent_role: str = "",
         agent_id: str = "",
-        custom_vars: Dict[str, Any] = None,
+        custom_vars: dict[str, Any] = None,
     ):
         self.target = target
         self.objective = objective
@@ -90,7 +90,7 @@ class TemplateContext:
             if max_steps > 0 else 100
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert context to dictionary for template rendering."""
         base = {
             "target": self.target,
@@ -132,7 +132,7 @@ class TemplateContext:
         return badges.get(severity.lower(), f"[{severity.upper()}]")
 
     @staticmethod
-    def _format_finding(finding: Dict[str, Any]) -> str:
+    def _format_finding(finding: dict[str, Any]) -> str:
         """Format a finding for display in prompts."""
         vuln_type = finding.get("vuln_type", "Unknown")
         severity = finding.get("severity", "unknown")
@@ -147,7 +147,7 @@ class TemplateContext:
         return text[:length-3] + "..."
 
     @staticmethod
-    def _format_list(items: List[Any], bullet: str = "-") -> str:
+    def _format_list(items: list[Any], bullet: str = "-") -> str:
         """Format a list with bullets."""
         return "\n".join(f"{bullet} {item}" for item in items)
 
@@ -162,7 +162,7 @@ class MakoPromptEngine:
 
     def __init__(
         self,
-        templates_dir: Optional[Path] = None,
+        templates_dir: Path | None = None,
         cache_enabled: bool = True,
         fallback_to_basic: bool = True,
     ):
@@ -177,11 +177,11 @@ class MakoPromptEngine:
         self._templates_dir = templates_dir or PROMPTS_DIR / "mako"
         self._cache_enabled = cache_enabled
         self._fallback_to_basic = fallback_to_basic
-        self._template_cache: Dict[str, Any] = {}
+        self._template_cache: dict[str, Any] = {}
         self._basic_engine = PromptEngine()
 
         # Set up Mako lookup if available
-        self._lookup: Optional[TemplateLookup] = None
+        self._lookup: TemplateLookup | None = None
         if MAKO_AVAILABLE:
             self._setup_lookup()
         elif not fallback_to_basic:
@@ -212,7 +212,7 @@ class MakoPromptEngine:
             default_filters=["str"],
         )
 
-    def _get_template(self, template_name: str) -> Optional[Template]:
+    def _get_template(self, template_name: str) -> Template | None:
         """
         Get a Mako template by name.
 
@@ -299,7 +299,7 @@ class MakoPromptEngine:
     def _render_basic(
         self,
         template_name: str,
-        variables: Dict[str, Any],
+        variables: dict[str, Any],
     ) -> str:
         """
         Basic template rendering without Mako.
@@ -383,7 +383,7 @@ class MakoPromptEngine:
     def _render_basic_string(
         self,
         template_string: str,
-        variables: Dict[str, Any],
+        variables: dict[str, Any],
     ) -> str:
         """Basic string template rendering."""
         result = template_string
@@ -409,9 +409,9 @@ class MakoPromptEngine:
         max_steps: int = 100,
         context_type: str = "web",
         phase: str = "recon",
-        include_behaviors: List[str] = None,
-        findings: List[Dict[str, Any]] = None,
-        custom_vars: Dict[str, Any] = None,
+        include_behaviors: list[str] = None,
+        findings: list[dict[str, Any]] = None,
+        custom_vars: dict[str, Any] = None,
     ) -> str:
         """
         Build a system prompt using Mako templates.
@@ -474,8 +474,8 @@ class MakoPromptEngine:
         max_turns: int = 50,
         turns_used: int = 0,
         shared_context: str = "",
-        shared_findings: List[Dict[str, Any]] = None,
-        custom_vars: Dict[str, Any] = None,
+        shared_findings: list[dict[str, Any]] = None,
+        custom_vars: dict[str, Any] = None,
     ) -> str:
         """
         Build a swarm agent prompt using Mako templates.
@@ -691,7 +691,7 @@ def initialize_default_templates(engine: MakoPromptEngine) -> None:
 
 
 # Global engine instance
-_mako_engine: Optional[MakoPromptEngine] = None
+_mako_engine: MakoPromptEngine | None = None
 
 
 def get_mako_engine() -> MakoPromptEngine:
@@ -754,7 +754,7 @@ class SystemPromptRenderer:
 
     def __init__(
         self,
-        engine: Optional[MakoPromptEngine] = None,
+        engine: MakoPromptEngine | None = None,
         template_name: str = "system_master_template.mako",
         include_env_context: bool = True,
     ):
@@ -773,7 +773,7 @@ class SystemPromptRenderer:
             "INFERNO_ENV_CONTEXT", "true"
         ).lower() in ("true", "1", "yes")
 
-    def _get_environment_info(self) -> Dict[str, Any]:
+    def _get_environment_info(self) -> dict[str, Any]:
         """
         Gather environment information for context injection.
 
@@ -783,7 +783,7 @@ class SystemPromptRenderer:
         import platform
         import socket
 
-        env_info: Dict[str, Any] = {}
+        env_info: dict[str, Any] = {}
 
         try:
             env_info["hostname"] = socket.gethostname()
@@ -867,9 +867,9 @@ class SystemPromptRenderer:
     def render(
         self,
         system_prompt: str,
-        compacted_summary: Optional[str] = None,
-        memory: Optional[str] = None,
-        reasoning_content: Optional[str] = None,
+        compacted_summary: str | None = None,
+        memory: str | None = None,
+        reasoning_content: str | None = None,
         target: str = "",
         objective: str = "",
         **extra_vars,
@@ -890,7 +890,7 @@ class SystemPromptRenderer:
             Fully rendered system prompt.
         """
         # Prepare template variables
-        template_vars: Dict[str, Any] = {
+        template_vars: dict[str, Any] = {
             "system_prompt": system_prompt,
             "compacted_summary": compacted_summary,
             "reasoning_content": reasoning_content,
@@ -957,12 +957,12 @@ class SystemPromptRenderer:
     def _render_inline(
         self,
         system_prompt: str,
-        compacted_summary: Optional[str],
+        compacted_summary: str | None,
         memory: str,
-        reasoning_content: Optional[str],
+        reasoning_content: str | None,
         rag_enabled: bool,
         env_context: str,
-        env_info: Dict[str, Any],
+        env_info: dict[str, Any],
     ) -> str:
         """
         Inline rendering fallback when master template is unavailable.
@@ -1016,7 +1016,7 @@ Remember that you must follow an iterative process of executing tools and comman
 
         return "\n".join(parts)
 
-    def _format_env_context(self, env_info: Dict[str, Any]) -> str:
+    def _format_env_context(self, env_info: dict[str, Any]) -> str:
         """
         Format environment context for inline rendering.
 
@@ -1066,7 +1066,7 @@ Remember that you must follow an iterative process of executing tools and comman
 def create_system_prompt_renderer(
     template_name: str = "system_master_template.mako",
     include_env_context: bool = True,
-    engine: Optional[MakoPromptEngine] = None,
+    engine: MakoPromptEngine | None = None,
 ) -> SystemPromptRenderer:
     """
     Create a system prompt renderer using the master template pattern.

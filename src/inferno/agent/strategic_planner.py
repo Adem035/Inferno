@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -324,7 +324,7 @@ class StrategicPlanner:
             plan_id=plan_id,
             target=target,
             objective=objective,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             mode=mode,
             reconnaissance_steps=recon_steps,
             enumeration_steps=enum_steps,
@@ -946,7 +946,7 @@ class StrategicPlanner:
             # Create credential extraction step
             chain_steps.append(
                 AttackPlanStep(
-                    step_id=f"chain1_cred_extract",
+                    step_id="chain1_cred_extract",
                     phase=AttackPhase.EXPLOITATION,
                     target=profile["url"],
                     attack_type=AttackType.CREDENTIAL_LEAK,
@@ -985,7 +985,7 @@ class StrategicPlanner:
             # Add session hijack step
             chain_steps.append(
                 AttackPlanStep(
-                    step_id=f"chain2_session_hijack",
+                    step_id="chain2_session_hijack",
                     phase=AttackPhase.EXPLOITATION,
                     target=profile["url"],
                     attack_type=AttackType.SESSION_HIJACK,
@@ -1019,7 +1019,7 @@ class StrategicPlanner:
             # Add cloud metadata access
             chain_steps.append(
                 AttackPlanStep(
-                    step_id=f"chain3_cloud_metadata",
+                    step_id="chain3_cloud_metadata",
                     phase=AttackPhase.EXPLOITATION,
                     target=profile["url"],
                     attack_type=AttackType.INFO_DISCLOSURE,

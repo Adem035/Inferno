@@ -9,8 +9,9 @@ tasks to child agents and aggregates their results.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -32,10 +33,10 @@ class HierarchyNode:
 
     agent: Any
     name: str
-    children: List[HierarchyNode] = field(default_factory=list)
-    parent: Optional[HierarchyNode] = None
+    children: list[HierarchyNode] = field(default_factory=list)
+    parent: HierarchyNode | None = None
     depth: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_child(self, child: HierarchyNode) -> HierarchyNode:
         """Add a child node."""
@@ -44,9 +45,9 @@ class HierarchyNode:
         self.children.append(child)
         return self
 
-    def get_all_descendants(self) -> List[HierarchyNode]:
+    def get_all_descendants(self) -> list[HierarchyNode]:
         """Get all descendants of this node."""
-        descendants: List[HierarchyNode] = []
+        descendants: list[HierarchyNode] = []
         for child in self.children:
             descendants.append(child)
             descendants.extend(child.get_all_descendants())
@@ -66,15 +67,15 @@ class DelegationTask:
     """A task delegated from root to child agent."""
 
     task_id: str
-    parent_task_id: Optional[str]
+    parent_task_id: str | None
     agent_name: str
     description: str
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
     status: str = "pending"  # pending, running, completed, failed
-    result: Optional[Any] = None
-    error: Optional[str] = None
-    created_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
+    created_at: str | None = None
+    completed_at: str | None = None
 
 
 @dataclass
@@ -82,20 +83,20 @@ class HierarchicalExecutionContext:
     """Context for hierarchical pattern execution."""
 
     root_agent: str
-    target: Optional[str] = None
-    operation_id: Optional[str] = None
-    tasks: List[DelegationTask] = field(default_factory=list)
-    results: Dict[str, Any] = field(default_factory=dict)
-    findings: List[Dict[str, Any]] = field(default_factory=list)
-    active_agents: Set[str] = field(default_factory=set)
-    completed_agents: Set[str] = field(default_factory=set)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    target: str | None = None
+    operation_id: str | None = None
+    tasks: list[DelegationTask] = field(default_factory=list)
+    results: dict[str, Any] = field(default_factory=dict)
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    active_agents: set[str] = field(default_factory=set)
+    completed_agents: set[str] = field(default_factory=set)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_task(self, task: DelegationTask) -> None:
         """Add a delegated task."""
         self.tasks.append(task)
 
-    def get_pending_tasks(self, agent_name: str) -> List[DelegationTask]:
+    def get_pending_tasks(self, agent_name: str) -> list[DelegationTask]:
         """Get pending tasks for an agent."""
         return [
             t for t in self.tasks
@@ -138,10 +139,10 @@ class HierarchicalExecutionResult:
     total_tasks: int
     completed_tasks: int
     failed_tasks: int
-    findings: List[Dict[str, Any]] = field(default_factory=list)
-    aggregated_results: Dict[str, Any] = field(default_factory=dict)
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    aggregated_results: dict[str, Any] = field(default_factory=dict)
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
 
 
@@ -157,7 +158,7 @@ class HierarchicalExecutor:
         self,
         max_depth: int = 5,
         parallel_children: bool = True,
-        message_bus: Optional[MessageBus] = None,
+        message_bus: MessageBus | None = None,
     ) -> None:
         """
         Initialize the hierarchical executor.
@@ -182,8 +183,8 @@ class HierarchicalExecutor:
         pattern: Pattern,
         agent_executor: Callable[[Any, HierarchicalExecutionContext], Any],
         initial_task: str,
-        target: Optional[str] = None,
-        operation_id: Optional[str] = None,
+        target: str | None = None,
+        operation_id: str | None = None,
     ) -> HierarchicalExecutionResult:
         """
         Execute a hierarchical pattern.
@@ -335,9 +336,9 @@ class HierarchicalExecutor:
         self,
         root_result: Any,
         context: HierarchicalExecutionContext,
-    ) -> List[DelegationTask]:
+    ) -> list[DelegationTask]:
         """Extract delegation tasks from root result."""
-        tasks: List[DelegationTask] = []
+        tasks: list[DelegationTask] = []
 
         # Check for explicit delegations
         if hasattr(root_result, "delegations"):
@@ -369,13 +370,13 @@ class HierarchicalExecutor:
 
     async def _execute_children_parallel(
         self,
-        children: List[HierarchyNode],
-        tasks: List[DelegationTask],
+        children: list[HierarchyNode],
+        tasks: list[DelegationTask],
         executor: Callable[[Any, HierarchicalExecutionContext], Any],
         context: HierarchicalExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute child agents in parallel."""
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
 
         # Create task groups by agent
         async_tasks = []
@@ -403,13 +404,13 @@ class HierarchicalExecutor:
 
     async def _execute_children_sequential(
         self,
-        children: List[HierarchyNode],
-        tasks: List[DelegationTask],
+        children: list[HierarchyNode],
+        tasks: list[DelegationTask],
         executor: Callable[[Any, HierarchicalExecutionContext], Any],
         context: HierarchicalExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute child agents sequentially."""
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
 
         for child in children:
             child_tasks = [t for t in tasks if t.agent_name == child.name]
@@ -430,7 +431,7 @@ class HierarchicalExecutor:
     async def _execute_child(
         self,
         child: HierarchyNode,
-        tasks: List[DelegationTask],
+        tasks: list[DelegationTask],
         executor: Callable[[Any, HierarchicalExecutionContext], Any],
         context: HierarchicalExecutionContext,
     ) -> Any:
@@ -462,11 +463,11 @@ class HierarchicalExecutor:
     async def _aggregate_results(
         self,
         root_agent: Any,
-        child_results: Dict[str, Any],
+        child_results: dict[str, Any],
         context: HierarchicalExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Aggregate child results at the root."""
-        aggregated: Dict[str, Any] = {
+        aggregated: dict[str, Any] = {
             "child_results": child_results,
             "findings": context.findings,
             "summary": {
@@ -490,7 +491,7 @@ class HierarchicalExecutor:
 
 def create_coordinated_assessment_pattern(
     coordinator: Any,
-    workers: List[Any],
+    workers: list[Any],
 ) -> Pattern:
     """
     Create a coordinated assessment pattern.
@@ -524,7 +525,7 @@ def create_coordinated_assessment_pattern(
 
 def create_red_team_hierarchy(
     team_lead: Any,
-    specialists: List[Any],
+    specialists: list[Any],
 ) -> Pattern:
     """
     Create a red team hierarchical pattern.

@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Annotated, Optional
+from typing import Annotated
 
 # Suppress huggingface/tokenizers parallelism warning early
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+from datetime import UTC
 
 import structlog
 import typer
@@ -68,7 +70,7 @@ def version_callback(value: bool) -> None:
 
 def print_banner() -> None:
     """Print the Inferno banner."""
-    banner = """
+    banner = f"""
 [bold red]
     ██╗███╗   ██╗███████╗███████╗██████╗ ███╗   ██╗ ██████╗
     ██║████╗  ██║██╔════╝██╔════╝██╔══██╗████╗  ██║██╔═══██╗
@@ -78,10 +80,10 @@ def print_banner() -> None:
     ╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝
 [/bold red]
 [dim]Autonomous AI-powered Penetration Testing Agent[/dim]
-[dim]Version {version}[/dim]
+[dim]Version {__version__}[/dim]
 
 [bold cyan]3 Tools[/bold cyan] [dim]•[/dim] [bold cyan]Kali Container[/bold cyan] [dim]•[/dim] [bold cyan]SecLists[/bold cyan] [dim]•[/dim] [bold cyan]Full Toolkit[/bold cyan]
-    """.format(version=__version__)
+    """
     console.print(banner)
 
 
@@ -754,7 +756,7 @@ def auth_login() -> None:
 
         # Open browser
         console.print("\n[bold cyan]Opening browser for authentication...[/bold cyan]")
-        console.print(f"[dim]If browser doesn't open, visit:[/dim]")
+        console.print("[dim]If browser doesn't open, visit:[/dim]")
         console.print(f"[link={auth_url}]{auth_url}[/link]\n")
 
         webbrowser.open(auth_url)
@@ -823,8 +825,8 @@ def auth_status() -> None:
         table.add_row("Source", credential.source)
 
         if credential.expires_at:
-            from datetime import datetime, timezone
-            remaining = credential.expires_at - datetime.now(timezone.utc)
+            from datetime import datetime
+            remaining = credential.expires_at - datetime.now(UTC)
             if remaining.total_seconds() > 0:
                 table.add_row("Expires In", f"{remaining.seconds // 60} minutes")
             else:
@@ -858,7 +860,7 @@ def shell() -> None:
 def main(
     ctx: typer.Context,
     version: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--version", "-V",
             callback=version_callback,

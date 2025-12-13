@@ -18,7 +18,7 @@ from __future__ import annotations
 import html
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -57,7 +57,7 @@ class TraceEvent:
     details: dict[str, Any] = field(default_factory=dict)
     duration_ms: float | None = None
     parent_id: str | None = None
-    event_id: str = field(default_factory=lambda: datetime.now(timezone.utc).strftime("%H%M%S%f"))
+    event_id: str = field(default_factory=lambda: datetime.now(UTC).strftime("%H%M%S%f"))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -98,12 +98,12 @@ class SessionTrace:
     ) -> None:
         self._target = target
         self._objective = objective
-        self._operation_id = operation_id or datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        self._operation_id = operation_id or datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         self._output_dir = output_dir or Path.home() / ".inferno" / "traces"
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
         self._events: list[TraceEvent] = []
-        self._start_time = datetime.now(timezone.utc)
+        self._start_time = datetime.now(UTC)
         self._end_time: datetime | None = None
 
         # Tracking stats
@@ -142,7 +142,7 @@ class SessionTrace:
     ) -> str:
         """Log an event and return its ID."""
         event = TraceEvent(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             event_type=event_type,
             title=title,
             details=details or {},
@@ -164,7 +164,7 @@ class SessionTrace:
     ) -> str:
         """Log a tool being called."""
         self._tool_calls += 1
-        self._active_tools[tool_name] = datetime.now(timezone.utc)
+        self._active_tools[tool_name] = datetime.now(UTC)
 
         # Truncate large inputs for readability
         clean_inputs = self._truncate_dict(inputs)
@@ -192,7 +192,7 @@ class SessionTrace:
         duration_ms = None
         if tool_name in self._active_tools:
             start = self._active_tools.pop(tool_name)
-            duration_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
 
         # Truncate large outputs
         clean_output = self._truncate_string(output, 2000) if output else None
@@ -334,7 +334,7 @@ class SessionTrace:
             "endpoint": endpoint,
             "evidence": self._truncate_string(evidence, 500) if evidence else None,
             "validated": validated,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         self._findings.append(finding)
 
@@ -401,7 +401,7 @@ class SessionTrace:
 
     def end_session(self, summary: str | None = None) -> None:
         """End the session and calculate final stats."""
-        self._end_time = datetime.now(timezone.utc)
+        self._end_time = datetime.now(UTC)
         duration = (self._end_time - self._start_time).total_seconds()
 
         self._log_event(
@@ -430,7 +430,7 @@ class SessionTrace:
         if self._end_time:
             duration = (self._end_time - self._start_time).total_seconds()
         else:
-            duration = (datetime.now(timezone.utc) - self._start_time).total_seconds()
+            duration = (datetime.now(UTC) - self._start_time).total_seconds()
 
         return {
             "operation_id": self._operation_id,

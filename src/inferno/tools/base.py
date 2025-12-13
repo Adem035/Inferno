@@ -10,10 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 
 class ToolCategory(str, Enum):
@@ -97,7 +94,7 @@ class ToolResult:
         execution_time_ms: float,
         started_at: str,
         ended_at: str,
-    ) -> "ToolResult":
+    ) -> ToolResult:
         """Add timing information to the result."""
         self.execution_time_ms = execution_time_ms
         self.started_at = started_at

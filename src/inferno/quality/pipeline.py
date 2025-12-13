@@ -177,7 +177,7 @@ class QualityGatePipeline:
                 )
 
                 # Treat exceptions as gate failures
-                candidate.mark_gate_failed(gate.name, f"Evaluation error: {str(e)}")
+                candidate.mark_gate_failed(gate.name, f"Evaluation error: {e!s}")
 
                 # Fail fast for blocking gates
                 if gate.is_blocking:

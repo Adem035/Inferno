@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import structlog
 
@@ -73,7 +74,7 @@ class Message:
     content: dict[str, Any]
     priority: MessagePriority = MessagePriority.NORMAL
     recipient: str | None = None  # None = broadcast
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     requires_ack: bool = False
     acknowledged_by: list[str] = field(default_factory=list)
 

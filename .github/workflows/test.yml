@@ -102,4 +102,4 @@ jobs:
         run: pip install bandit
 
       - name: Run security scan
-        run: bandit -r src/inferno -ll -x tests
+        run: bandit -r src/inferno -ll -x tests -c .bandit

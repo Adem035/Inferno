@@ -15,14 +15,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Type,
     Union,
     get_args,
     get_origin,
@@ -36,7 +32,7 @@ from inferno.tools.base import BaseTool, ToolCategory, ToolExample, ToolResult
 logger = structlog.get_logger(__name__)
 
 # Type mapping from Python types to JSON Schema types
-PYTHON_TO_JSON_TYPE: Dict[Type, str] = {
+PYTHON_TO_JSON_TYPE: dict[type, str] = {
     str: "string",
     int: "integer",
     float: "number",
@@ -47,7 +43,7 @@ PYTHON_TO_JSON_TYPE: Dict[Type, str] = {
 }
 
 
-def _get_json_type(python_type: Type) -> Dict[str, Any]:
+def _get_json_type(python_type: type) -> dict[str, Any]:
     """Convert Python type hint to JSON Schema type definition."""
     # Handle None type
     if python_type is type(None):
@@ -72,20 +68,20 @@ def _get_json_type(python_type: Type) -> Dict[str, Any]:
             return {"oneOf": [_get_json_type(a) for a in non_none_args]}
 
     # Handle List types
-    if origin is list or origin is List:
+    if origin is list or origin is list:
         if args:
             return {"type": "array", "items": _get_json_type(args[0])}
         return {"type": "array"}
 
     # Handle Dict types
-    if origin is dict or origin is Dict:
+    if origin is dict or origin is dict:
         return {"type": "object"}
 
     # Default to string for unknown types
     return {"type": "string"}
 
 
-def _extract_docstring_parts(docstring: str) -> tuple[str, Dict[str, str]]:
+def _extract_docstring_parts(docstring: str) -> tuple[str, dict[str, str]]:
     """
     Extract description and parameter descriptions from docstring.
 
@@ -138,8 +134,8 @@ def _extract_docstring_parts(docstring: str) -> tuple[str, Dict[str, str]]:
 
 def _generate_schema_from_function(
     func: Callable,
-    param_descriptions: Dict[str, str],
-) -> Dict[str, Any]:
+    param_descriptions: dict[str, str],
+) -> dict[str, Any]:
     """Generate JSON Schema from function signature and type hints."""
     sig = inspect.signature(func)
     hints = get_type_hints(func) if hasattr(func, "__annotations__") else {}
@@ -185,10 +181,10 @@ class FunctionToolConfig:
     """Configuration for function-based tools."""
     category: ToolCategory = ToolCategory.UTILITY
     defer_loading: bool = True
-    examples: List[ToolExample] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
+    examples: list[ToolExample] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     requires_auth: bool = False
-    timeout: Optional[float] = None
+    timeout: float | None = None
 
 
 class FunctionTool(BaseTool):
@@ -202,9 +198,9 @@ class FunctionTool(BaseTool):
         self,
         func: Callable,
         config: FunctionToolConfig,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        schema: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        description: str | None = None,
+        schema: dict[str, Any] | None = None,
     ):
         self._func = func
         self._config = config
@@ -233,11 +229,11 @@ class FunctionTool(BaseTool):
         return self._config.category
 
     @property
-    def input_schema(self) -> Dict[str, Any]:
+    def input_schema(self) -> dict[str, Any]:
         return self._schema
 
     @property
-    def examples(self) -> List[ToolExample]:
+    def examples(self) -> list[ToolExample]:
         return self._config.examples
 
     @property
@@ -279,7 +275,7 @@ class FunctionTool(BaseTool):
                 output=str(result) if result is not None else "",
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ToolResult(
                 success=False,
                 output="",
@@ -302,12 +298,12 @@ class FunctionTool(BaseTool):
 def function_tool(
     category: ToolCategory = ToolCategory.UTILITY,
     defer_loading: bool = True,
-    examples: Optional[List[ToolExample]] = None,
-    tags: Optional[List[str]] = None,
+    examples: list[ToolExample] | None = None,
+    tags: list[str] | None = None,
     requires_auth: bool = False,
-    timeout: Optional[float] = None,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
+    timeout: float | None = None,
+    name: str | None = None,
+    description: str | None = None,
 ) -> Callable[[Callable], FunctionTool]:
     """
     Decorator to create a tool from a function with automatic schema generation.
@@ -386,7 +382,7 @@ def function_tool(
 
 
 # Registry integration helper
-_registered_function_tools: List[FunctionTool] = []
+_registered_function_tools: list[FunctionTool] = []
 
 
 def register_function_tool(tool: FunctionTool) -> FunctionTool:
@@ -399,7 +395,7 @@ def register_function_tool(tool: FunctionTool) -> FunctionTool:
     return tool
 
 
-def get_registered_function_tools() -> List[FunctionTool]:
+def get_registered_function_tools() -> list[FunctionTool]:
     """Get all registered function tools."""
     return _registered_function_tools.copy()
 

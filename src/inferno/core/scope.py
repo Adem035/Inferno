@@ -478,7 +478,7 @@ class ScopeManager:
             for ip in self._config.exclude_ips:
                 lines.append(f"  - {ip}")
 
-        lines.append(f"\n## Settings:")
+        lines.append("\n## Settings:")
         lines.append(f"  - Violation Action: {self._config.violation_action.value}")
         lines.append(f"  - Allow Subdomains: {self._config.allow_subdomains}")
         lines.append(f"  - CTF Mode: {self._config.ctf_mode}")

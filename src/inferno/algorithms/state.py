@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +45,7 @@ class GlobalAlgorithmState:
     # Metadata
     version: int = 2
     last_updated: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     total_operations: int = 0
     total_findings: int = 0
@@ -166,7 +166,7 @@ class AlgorithmStateManager:
         if self._state is None:
             return
 
-        self._state.last_updated = datetime.now(timezone.utc).isoformat()
+        self._state.last_updated = datetime.now(UTC).isoformat()
         self._storage_path.mkdir(parents=True, exist_ok=True)
 
         try:

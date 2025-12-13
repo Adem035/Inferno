@@ -55,8 +55,8 @@ def list_templates() -> list[str]:
 
 
 __all__ = [
-    "TEMPLATES_DIR",
     "TEMPLATES",
+    "TEMPLATES_DIR",
     "get_template_path",
     "list_templates",
 ]

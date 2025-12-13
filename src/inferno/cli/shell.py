@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import shlex
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC
+from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -162,7 +164,7 @@ class InfernoShell:
 
     def print_banner(self) -> None:
         """Print the Inferno banner."""
-        banner = """[bold red]
+        banner = f"""[bold red]
     ██╗███╗   ██╗███████╗███████╗██████╗ ███╗   ██╗ ██████╗
     ██║████╗  ██║██╔════╝██╔════╝██╔══██╗████╗  ██║██╔═══██╗
     ██║██╔██╗ ██║█████╗  █████╗  ██████╔╝██╔██╗ ██║██║   ██║
@@ -171,10 +173,10 @@ class InfernoShell:
     ╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝
 [/bold red]
 [dim]Autonomous AI-powered Penetration Testing Agent[/dim]
-[dim]Version {version} | Type 'help' for commands[/dim]
+[dim]Version {__version__} | Type 'help' for commands[/dim]
 
 [bold cyan]3 Tools[/bold cyan] [dim]•[/dim] [bold cyan]Kali Container[/bold cyan] [dim]•[/dim] [bold cyan]SecLists[/bold cyan] [dim]•[/dim] [bold cyan]Full Toolkit[/bold cyan]
-        """.format(version=__version__)
+        """
         console.print(banner)
 
     def print_prompt(self) -> str:
@@ -417,7 +419,7 @@ class InfernoShell:
         else:
             self.current_objective = default_obj
 
-        console.print(f"\n[green]Objective set[/green]\n")
+        console.print("\n[green]Objective set[/green]\n")
 
         # Summary
         console.print(Rule("[bold]Summary[/bold]", style="dim"))
@@ -475,7 +477,7 @@ class InfernoShell:
         console.print(f"\n[bold]Security Tools:[/bold] {len(available)} available")
 
         # Current settings
-        console.print(f"\n[bold]Current Settings:[/bold]")
+        console.print("\n[bold]Current Settings:[/bold]")
         console.print(f"  Target: {self.current_target or '[dim]not set[/dim]'}")
         console.print(f"  Objective: {self.current_objective[:50]}...")
         console.print(f"  Persona: {self.current_persona}")
@@ -497,7 +499,7 @@ class InfernoShell:
             console.print("[yellow]Docker is not running - please start it[/yellow]")
             return
 
-        console.print(f"[green]Docker OK[/green]")
+        console.print("[green]Docker OK[/green]")
 
         # Start Qdrant
         console.print("\n[bold]2.[/bold] Starting Qdrant...")
@@ -1168,8 +1170,8 @@ class InfernoShell:
         table.add_row("Max Continuations", str(self.max_continuations))
 
         # Features
-        table.add_row("WAF Detection", f"[green]auto[/green]" if self.auto_waf_detect else "[dim]disabled[/dim]")
-        table.add_row("Swarm/Meta-tools", f"[green]auto (confidence-based)[/green]")
+        table.add_row("WAF Detection", "[green]auto[/green]" if self.auto_waf_detect else "[dim]disabled[/dim]")
+        table.add_row("Swarm/Meta-tools", "[green]auto (confidence-based)[/green]")
 
         # Scope
         scope_str = f"{len(self.scope_inclusions)} inclusions, {len(self.scope_exclusions)} exclusions"
@@ -1412,7 +1414,7 @@ class InfernoShell:
             # Create profile from current settings
             profile = AssessmentProfile(
                 name=profile_name,
-                description=f"Custom profile created from current settings",
+                description="Custom profile created from current settings",
                 mode=self.current_mode,
                 max_turns=self.max_turns,
                 ctf_mode=self.ctf_mode,
@@ -1486,7 +1488,7 @@ class InfernoShell:
         filename = args[1] if len(args) > 1 else None
 
         # Build a mock report from current findings
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from inferno.reporting.models import Finding, Report, Severity
 
@@ -1516,7 +1518,7 @@ class InfernoShell:
 
         from inferno.reporting.models import ReportMetadata
         metadata = ReportMetadata(
-            operation_id=f"export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+            operation_id=f"export_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
             target=self.current_target or "unknown",
             objective=self.current_objective,
             scope="manual export",
@@ -2331,7 +2333,7 @@ class InfernoShell:
         try:
             hostname = socket.gethostname()
             ip_addr = socket.gethostbyname(hostname)
-        except (socket.error, OSError):
+        except OSError:
             hostname = "unknown"
             ip_addr = "127.0.0.1"
 
@@ -2547,7 +2549,7 @@ Paste the program's:
 
             console.print()
             console.print(f"[green]✓ Program context saved![/green] ({len(self.program_context)} characters)")
-            console.print(f"[dim]This will be included in the assessment context.[/dim]")
+            console.print("[dim]This will be included in the assessment context.[/dim]")
 
             # Show preview
             preview = self.program_context[:300].replace("\n", " ")

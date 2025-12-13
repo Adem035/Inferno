@@ -8,7 +8,8 @@ with support for deferred loading via Tool Search and built-in Anthropic tools.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from datetime import UTC
+from typing import Any
 
 import structlog
 
@@ -23,9 +24,6 @@ from inferno.tools.base import (
     ToolCategory,
     ToolResult,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -247,10 +245,10 @@ class ToolRegistry:
 
         # Execute tool with timing
         import time
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         start_time = time.perf_counter()
-        started_at = datetime.now(timezone.utc).isoformat()
+        started_at = datetime.now(UTC).isoformat()
 
         try:
             logger.debug("executing_tool", name=tool_name, input=tool_input)
@@ -271,7 +269,7 @@ class ToolRegistry:
 
             # Add timing information
             end_time = time.perf_counter()
-            ended_at = datetime.now(timezone.utc).isoformat()
+            ended_at = datetime.now(UTC).isoformat()
             execution_time_ms = (end_time - start_time) * 1000
 
             result.with_timing(
@@ -339,9 +337,7 @@ class ToolRegistry:
         else:
             # Try to construct command from parameters
             for key, value in tool_input.items():
-                if key in ("target", "host", "url"):
-                    command_parts.append(str(value))
-                elif key in ("flags", "options", "args"):
+                if key in ("target", "host", "url") or key in ("flags", "options", "args"):
                     command_parts.append(str(value))
                 elif key in ("port",):
                     command_parts.extend(["-p", str(value)])

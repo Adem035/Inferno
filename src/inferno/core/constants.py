@@ -162,12 +162,12 @@ class QualityThresholds:
 
 # Export all for convenience
 __all__ = [
-    "Timeouts",
-    "SizeLimits",
-    "ConnectionLimits",
     "AgentConfig",
+    "ConnectionLimits",
     "DockerPaths",
     "Models",
-    "SecurityPatterns",
     "QualityThresholds",
+    "SecurityPatterns",
+    "SizeLimits",
+    "Timeouts",
 ]

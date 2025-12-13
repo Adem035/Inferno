@@ -21,7 +21,7 @@ import os
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import structlog
 
@@ -162,7 +162,7 @@ def calculate_timeout(command: str, default: int = 120) -> int:
 # Environment Detection
 # ============================================================================
 
-def detect_environment() -> Dict[str, Any]:
+def detect_environment() -> dict[str, Any]:
     """Detect the execution environment."""
     env = {
         "type": "local",
@@ -229,10 +229,10 @@ You can also use #1, 1, or the full session ID.
 )
 async def execute_command(
     command: str,
-    timeout: Optional[int] = None,
+    timeout: int | None = None,
     interactive: bool = False,
-    session_id: Optional[str] = None,
-    working_dir: Optional[str] = None,
+    session_id: str | None = None,
+    working_dir: str | None = None,
 ) -> ToolResult:
     """
     Execute any command on the target system.
@@ -385,12 +385,12 @@ async def execute_command(
                 process.communicate(),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Graceful termination
             process.terminate()
             try:
                 await asyncio.wait_for(process.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
 
@@ -559,7 +559,7 @@ async def execute_code(
     code: str,
     language: str = "python",
     timeout: int = 300,
-    save_as: Optional[str] = None,
+    save_as: str | None = None,
 ) -> ToolResult:
     """
     Execute code in the Kali container.
@@ -644,7 +644,7 @@ done
 # Export all tools
 # Note: web_request removed - use HTTPTool instead (or curl via generic_linux_command)
 __all__ = [
+    "execute_code",
     "execute_command",
     "generic_linux_command",
-    "execute_code",
 ]

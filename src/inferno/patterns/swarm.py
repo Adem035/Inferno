@@ -8,8 +8,9 @@ context to each other based on their specialized capabilities.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -33,9 +34,9 @@ class Handoff:
     target_agent: Any
     agent_name: str
     tool_description: str
-    condition: Optional[Callable[..., bool]] = None
-    on_invoke_handoff: Optional[Callable[..., Any]] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    condition: Callable[..., bool] | None = None
+    on_invoke_handoff: Callable[..., Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Initialize the handoff with an invocation function."""
@@ -60,11 +61,11 @@ class SwarmAgent:
 
     name: str
     config: Any  # SubAgentConfig or similar
-    handoffs: List[Handoff] = field(default_factory=list)
+    handoffs: list[Handoff] = field(default_factory=list)
     pattern: str = "swarm"
     description: str = ""
     instructions: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_handoff(self, handoff: Handoff) -> SwarmAgent:
         """
@@ -112,8 +113,8 @@ class SwarmAgent:
 
 def handoff(
     agent: SwarmAgent,
-    tool_description_override: Optional[str] = None,
-    condition: Optional[Callable[..., bool]] = None,
+    tool_description_override: str | None = None,
+    condition: Callable[..., bool] | None = None,
 ) -> Handoff:
     """
     Create a handoff to another agent.
@@ -153,19 +154,19 @@ class SwarmExecutionContext:
     """Context passed between agents during swarm execution."""
 
     current_agent: str
-    message_history: List[Dict[str, Any]] = field(default_factory=list)
-    findings: List[Dict[str, Any]] = field(default_factory=list)
-    target: Optional[str] = None
-    operation_id: Optional[str] = None
+    message_history: list[dict[str, Any]] = field(default_factory=list)
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    target: str | None = None
+    operation_id: str | None = None
     handoff_count: int = 0
     max_handoffs: int = 20
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_message(
         self,
         role: str,
         content: str,
-        agent: Optional[str] = None,
+        agent: str | None = None,
     ) -> None:
         """Add a message to the history."""
         self.message_history.append({
@@ -174,7 +175,7 @@ class SwarmExecutionContext:
             "agent": agent or self.current_agent,
         })
 
-    def add_finding(self, finding: Dict[str, Any]) -> None:
+    def add_finding(self, finding: dict[str, Any]) -> None:
         """Add a security finding."""
         finding["discovered_by"] = self.current_agent
         self.findings.append(finding)
@@ -192,10 +193,10 @@ class SwarmExecutionResult:
     entry_agent: str
     final_agent: str
     total_handoffs: int
-    findings: List[Dict[str, Any]] = field(default_factory=list)
-    agent_sequence: List[str] = field(default_factory=list)
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    agent_sequence: list[str] = field(default_factory=list)
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
 
 
@@ -210,7 +211,7 @@ class SwarmExecutor:
     def __init__(
         self,
         max_handoffs: int = 20,
-        message_bus: Optional[MessageBus] = None,
+        message_bus: MessageBus | None = None,
     ) -> None:
         """
         Initialize the swarm executor.
@@ -221,7 +222,7 @@ class SwarmExecutor:
         """
         self._max_handoffs = max_handoffs
         self._message_bus = message_bus
-        self._agents: Dict[str, SwarmAgent] = {}
+        self._agents: dict[str, SwarmAgent] = {}
 
     def register_agent(self, agent: SwarmAgent) -> None:
         """Register an agent with the executor."""
@@ -233,8 +234,8 @@ class SwarmExecutor:
         pattern: Pattern,
         agent_executor: Callable[[SwarmAgent, SwarmExecutionContext], Any],
         initial_task: str,
-        target: Optional[str] = None,
-        operation_id: Optional[str] = None,
+        target: str | None = None,
+        operation_id: str | None = None,
     ) -> SwarmExecutionResult:
         """
         Execute a swarm pattern.
@@ -351,7 +352,7 @@ class SwarmExecutor:
         self,
         result: Any,
         current_agent: SwarmAgent,
-    ) -> Optional[SwarmAgent]:
+    ) -> SwarmAgent | None:
         """
         Check if the result indicates a handoff.
 
@@ -409,9 +410,9 @@ def create_swarm_agent(
 def setup_bidirectional_handoffs(
     agent_a: SwarmAgent,
     agent_b: SwarmAgent,
-    description_a_to_b: Optional[str] = None,
-    description_b_to_a: Optional[str] = None,
-) -> Tuple[SwarmAgent, SwarmAgent]:
+    description_a_to_b: str | None = None,
+    description_b_to_a: str | None = None,
+) -> tuple[SwarmAgent, SwarmAgent]:
     """
     Set up bidirectional handoffs between two agents.
 

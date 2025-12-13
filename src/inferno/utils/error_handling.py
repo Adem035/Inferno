@@ -14,14 +14,12 @@ from __future__ import annotations
 import asyncio
 import functools
 import traceback
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import structlog
 
 from inferno.tools.base import ToolResult
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -96,7 +94,7 @@ def handle_tool_error(
                 # Don't catch cancellation - let it propagate
                 raise
 
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 logger.warning(
                     f"{name}_timeout",
                     error=str(e),

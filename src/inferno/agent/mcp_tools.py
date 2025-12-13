@@ -461,7 +461,7 @@ Remediation: {remediation}"""
                             f"Total vulnerabilities found: {_evaluation_metrics['vulnerabilities_found']}"
                 }]
             }
-    except Exception as e:
+    except Exception:
         # Memory storage failed but metrics are updated - don't crash
         pass
 
@@ -724,7 +724,7 @@ async def nvd_lookup(args: dict[str, Any]) -> dict[str, Any]:
         return {
             "content": [{
                 "type": "text",
-                "text": f"NVD lookup error: {str(e)}"
+                "text": f"NVD lookup error: {e!s}"
             }],
             "is_error": True
         }
@@ -847,7 +847,7 @@ async def write_key_findings(args: dict[str, Any]) -> dict[str, Any]:
         return {
             "content": [{
                 "type": "text",
-                "text": f"Error writing findings: {str(e)}"
+                "text": f"Error writing findings: {e!s}"
             }],
             "is_error": True
         }
@@ -875,7 +875,7 @@ async def read_key_findings(args: dict[str, Any]) -> dict[str, Any]:
                 }]
             }
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             content = f.read()
 
         if not content.strip():
@@ -900,7 +900,7 @@ async def read_key_findings(args: dict[str, Any]) -> dict[str, Any]:
         return {
             "content": [{
                 "type": "text",
-                "text": f"Error reading findings: {str(e)}"
+                "text": f"Error reading findings: {e!s}"
             }],
             "is_error": True
         }

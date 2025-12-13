@@ -9,8 +9,9 @@ adaptive workflows that choose different paths based on findings.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -23,7 +24,7 @@ logger = structlog.get_logger(__name__)
 
 
 # Type alias for condition predicates
-ConditionPredicate = Callable[[Dict[str, Any]], bool]
+ConditionPredicate = Callable[[dict[str, Any]], bool]
 
 
 @dataclass
@@ -37,12 +38,12 @@ class Condition:
 
     name: str
     agent: Any
-    predicate: Optional[ConditionPredicate] = None
+    predicate: ConditionPredicate | None = None
     priority: int = 0
     description: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def evaluate(self, context: Dict[str, Any]) -> bool:
+    def evaluate(self, context: dict[str, Any]) -> bool:
         """
         Evaluate this condition against the context.
 
@@ -77,21 +78,21 @@ class ConditionalBranch:
     condition: Condition
     agent_name: str
     selected: bool = False
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
 
 
 @dataclass
 class ConditionalExecutionContext:
     """Context for conditional pattern execution."""
 
-    target: Optional[str] = None
-    operation_id: Optional[str] = None
-    findings: List[Dict[str, Any]] = field(default_factory=list)
-    context_data: Dict[str, Any] = field(default_factory=dict)
-    evaluated_conditions: List[str] = field(default_factory=list)
-    selected_branch: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    target: str | None = None
+    operation_id: str | None = None
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    context_data: dict[str, Any] = field(default_factory=dict)
+    evaluated_conditions: list[str] = field(default_factory=list)
+    selected_branch: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def set_data(self, key: str, value: Any) -> None:
         """Set context data used for condition evaluation."""
@@ -101,7 +102,7 @@ class ConditionalExecutionContext:
         """Get context data."""
         return self.context_data.get(key, default)
 
-    def add_finding(self, finding: Dict[str, Any]) -> None:
+    def add_finding(self, finding: dict[str, Any]) -> None:
         """Add a security finding."""
         self.findings.append(finding)
 
@@ -112,12 +113,12 @@ class ConditionalExecutionResult:
 
     pattern_name: str
     total_conditions: int
-    selected_condition: Optional[str]
-    selected_agent: Optional[str]
+    selected_condition: str | None
+    selected_agent: str | None
     branches_evaluated: int
-    agent_result: Optional[Any] = None
+    agent_result: Any | None = None
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
     fallback_used: bool = False
 
@@ -134,7 +135,7 @@ class ConditionalExecutor:
         self,
         default_timeout: float = 300.0,
         evaluate_all: bool = False,
-        message_bus: Optional[MessageBus] = None,
+        message_bus: MessageBus | None = None,
     ) -> None:
         """
         Initialize the conditional executor.
@@ -152,9 +153,9 @@ class ConditionalExecutor:
         self,
         pattern: Pattern,
         agent_executor: Callable[[Any, ConditionalExecutionContext], Any],
-        context_data: Optional[Dict[str, Any]] = None,
-        target: Optional[str] = None,
-        operation_id: Optional[str] = None,
+        context_data: dict[str, Any] | None = None,
+        target: str | None = None,
+        operation_id: str | None = None,
     ) -> ConditionalExecutionResult:
         """
         Execute a conditional pattern.
@@ -250,7 +251,7 @@ class ConditionalExecutor:
                 fallback_used=selected_condition.predicate is None,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             duration = time.time() - start_time
             return ConditionalExecutionResult(
                 pattern_name=pattern.name,
@@ -282,9 +283,9 @@ class ConditionalExecutor:
                 duration_seconds=duration,
             )
 
-    def _build_conditions(self, pattern: Pattern) -> List[Condition]:
+    def _build_conditions(self, pattern: Pattern) -> list[Condition]:
         """Build conditions from pattern."""
-        conditions: List[Condition] = []
+        conditions: list[Condition] = []
 
         for name, cond_data in pattern.conditions.items():
             agent = cond_data.get("agent")
@@ -306,16 +307,16 @@ class ConditionalExecutor:
 
     def _evaluate_conditions(
         self,
-        conditions: List[Condition],
+        conditions: list[Condition],
         context: ConditionalExecutionContext,
-    ) -> tuple[Optional[Condition], Optional[Any]]:
+    ) -> tuple[Condition | None, Any | None]:
         """
         Evaluate conditions and return the matching one.
 
         Returns:
             Tuple of (condition, agent) or (None, None) if no match.
         """
-        fallback: Optional[Condition] = None
+        fallback: Condition | None = None
 
         for condition in conditions:
             context.evaluated_conditions.append(condition.name)
@@ -353,7 +354,7 @@ def vuln_type_condition(vuln_type: str) -> ConditionPredicate:
         >>> sqli_condition = vuln_type_condition("sqli")
         >>> cond = Condition("sqli_found", sqli_agent, sqli_condition)
     """
-    def predicate(context: Dict[str, Any]) -> bool:
+    def predicate(context: dict[str, Any]) -> bool:
         detected_type = context.get("vuln_type", "").lower()
         return vuln_type.lower() in detected_type
 
@@ -370,7 +371,7 @@ def technology_condition(technology: str) -> ConditionPredicate:
     Returns:
         Predicate function.
     """
-    def predicate(context: Dict[str, Any]) -> bool:
+    def predicate(context: dict[str, Any]) -> bool:
         detected_tech = context.get("technologies", [])
         if isinstance(detected_tech, str):
             detected_tech = [detected_tech]
@@ -392,7 +393,7 @@ def port_open_condition(port: int) -> ConditionPredicate:
     Returns:
         Predicate function.
     """
-    def predicate(context: Dict[str, Any]) -> bool:
+    def predicate(context: dict[str, Any]) -> bool:
         open_ports = context.get("open_ports", [])
         return port in open_ports
 
@@ -409,7 +410,7 @@ def service_condition(service: str) -> ConditionPredicate:
     Returns:
         Predicate function.
     """
-    def predicate(context: Dict[str, Any]) -> bool:
+    def predicate(context: dict[str, Any]) -> bool:
         services = context.get("services", [])
         if isinstance(services, str):
             services = [services]
@@ -433,7 +434,7 @@ def severity_condition(min_severity: str) -> ConditionPredicate:
     """
     severity_order = ["low", "medium", "high", "critical"]
 
-    def predicate(context: Dict[str, Any]) -> bool:
+    def predicate(context: dict[str, Any]) -> bool:
         severity = context.get("severity", "low").lower()
         try:
             detected_idx = severity_order.index(severity)
@@ -445,7 +446,7 @@ def severity_condition(min_severity: str) -> ConditionPredicate:
     return predicate
 
 
-def has_finding_condition(finding_type: Optional[str] = None) -> ConditionPredicate:
+def has_finding_condition(finding_type: str | None = None) -> ConditionPredicate:
     """
     Create a condition that checks if findings exist.
 
@@ -455,7 +456,7 @@ def has_finding_condition(finding_type: Optional[str] = None) -> ConditionPredic
     Returns:
         Predicate function.
     """
-    def predicate(context: Dict[str, Any]) -> bool:
+    def predicate(context: dict[str, Any]) -> bool:
         findings = context.get("findings", [])
         if not findings:
             return False

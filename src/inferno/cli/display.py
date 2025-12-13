@@ -774,11 +774,11 @@ def print_finding(
     finding_text.append(f"{style['icon']} ", style=style["color"])
     finding_text.append(f"[{severity.upper()}] ", style=f"bold {style['color']}")
     finding_text.append(title, style="bold")
-    finding_text.append(f"\n   Location: ", style="dim")
+    finding_text.append("\n   Location: ", style="dim")
     finding_text.append(location, style="cyan")
 
     if evidence:
-        finding_text.append(f"\n   Evidence: ", style="dim")
+        finding_text.append("\n   Evidence: ", style="dim")
         finding_text.append(evidence[:100], style="white")
 
     console.print(Panel(finding_text, border_style=style["color"], box=ROUNDED))

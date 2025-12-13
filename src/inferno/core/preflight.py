@@ -283,7 +283,7 @@ class PreflightValidator:
                     self._results.append(ValidationResult(
                         name="Memory Backend",
                         passed=True,  # Not critical - fallback to in-memory
-                        message=f"Qdrant not reachable - using in-memory fallback",
+                        message="Qdrant not reachable - using in-memory fallback",
                         severity="warning",
                     ))
             except Exception:

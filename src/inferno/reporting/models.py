@@ -8,7 +8,7 @@ and reports.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -62,7 +62,7 @@ class Finding:
     cwe_ids: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
     proof_of_concept: str | None = None
-    discovered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    discovered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # Quality gate metadata (optional, populated if quality gates enabled)
@@ -108,7 +108,7 @@ class Finding:
             cwe_ids=data.get("cwe_ids", []),
             references=data.get("references", []),
             proof_of_concept=data.get("proof_of_concept"),
-            discovered_at=datetime.fromisoformat(data["discovered_at"]) if "discovered_at" in data else datetime.now(timezone.utc),
+            discovered_at=datetime.fromisoformat(data["discovered_at"]) if "discovered_at" in data else datetime.now(UTC),
             metadata=data.get("metadata", {}),
             quality_score=data.get("quality_score", 0.0),
             gates_passed=data.get("gates_passed", []),
@@ -126,7 +126,7 @@ class ReportMetadata:
     objective: str
     scope: str
     assessor: str = "Inferno AI"
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     duration_seconds: float = 0.0
     turns_used: int = 0

@@ -8,12 +8,10 @@ Designed for Inferno's penetration testing agent coordination.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 
 class PatternType(Enum):
@@ -54,9 +52,9 @@ class ParallelAgentConfig:
 
     agent_name: str
     unified_context: bool = True
-    timeout: Optional[float] = None
+    timeout: float | None = None
     priority: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate configuration."""
@@ -91,25 +89,25 @@ class Pattern:
     """
 
     name: str
-    type: Union[PatternType, str]
+    type: PatternType | str
     description: str = ""
 
     # Type-specific attributes
-    configs: List[ParallelAgentConfig] = field(default_factory=list)
-    entry_agent: Optional[Any] = None
-    agents: List[Any] = field(default_factory=list)
-    root_agent: Optional[Any] = None
-    sequence: List[Dict[str, Any]] = field(default_factory=list)
-    conditions: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    configs: list[ParallelAgentConfig] = field(default_factory=list)
+    entry_agent: Any | None = None
+    agents: list[Any] = field(default_factory=list)
+    root_agent: Any | None = None
+    sequence: list[dict[str, Any]] = field(default_factory=list)
+    conditions: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     # Common configuration options
-    max_concurrent: Optional[int] = None
+    max_concurrent: int | None = None
     unified_context: bool = True
-    timeout: Optional[float] = None
+    timeout: float | None = None
     retry_on_failure: bool = False
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Initialize pattern type and validate."""
@@ -143,7 +141,7 @@ class Pattern:
 
     def add_parallel_agent(
         self,
-        agent: Union[str, ParallelAgentConfig],
+        agent: str | ParallelAgentConfig,
     ) -> Pattern:
         """
         Add an agent for parallel execution.
@@ -259,7 +257,7 @@ class Pattern:
         self,
         condition_name: str,
         agent: Any,
-        predicate: Optional[Callable[..., bool]] = None,
+        predicate: Callable[..., bool] | None = None,
     ) -> Pattern:
         """
         Add a conditional branch.
@@ -302,10 +300,7 @@ class Pattern:
         """
         if self.type == PatternType.PARALLEL:
             return self.add_parallel_agent(item)
-        elif self.type == PatternType.SWARM:
-            self.agents.append(item)
-            return self
-        elif self.type == PatternType.HIERARCHICAL:
+        elif self.type == PatternType.SWARM or self.type == PatternType.HIERARCHICAL:
             self.agents.append(item)
             return self
         elif self.type == PatternType.SEQUENTIAL:
@@ -350,14 +345,14 @@ class Pattern:
 
         return True
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert pattern to dictionary representation.
 
         Returns:
             Dictionary containing pattern configuration.
         """
-        base: Dict[str, Any] = {
+        base: dict[str, Any] = {
             "name": self.name,
             "type": self.type.value,
             "description": self.description,
@@ -413,7 +408,7 @@ class Pattern:
 
         return base
 
-    def get_agents(self) -> List[Any]:
+    def get_agents(self) -> list[Any]:
         """
         Get all agents involved in this pattern.
 
@@ -423,10 +418,7 @@ class Pattern:
         if self.type == PatternType.PARALLEL:
             return [c.agent_name for c in self.configs]
 
-        elif self.type == PatternType.SWARM:
-            return self.agents
-
-        elif self.type == PatternType.HIERARCHICAL:
+        elif self.type == PatternType.SWARM or self.type == PatternType.HIERARCHICAL:
             return self.agents
 
         elif self.type == PatternType.SEQUENTIAL:
@@ -452,7 +444,7 @@ class Pattern:
 def parallel_pattern(
     name: str,
     description: str = "",
-    agents: Optional[List[str]] = None,
+    agents: list[str] | None = None,
     **kwargs: Any,
 ) -> Pattern:
     """
@@ -495,7 +487,7 @@ def swarm_pattern(
     name: str,
     entry_agent: Any,
     description: str = "",
-    agents: Optional[List[Any]] = None,
+    agents: list[Any] | None = None,
     **kwargs: Any,
 ) -> Pattern:
     """
@@ -540,7 +532,7 @@ def hierarchical_pattern(
     name: str,
     root_agent: Any,
     description: str = "",
-    children: Optional[List[Any]] = None,
+    children: list[Any] | None = None,
     **kwargs: Any,
 ) -> Pattern:
     """
@@ -583,7 +575,7 @@ def hierarchical_pattern(
 
 def sequential_pattern(
     name: str,
-    steps: List[Any],
+    steps: list[Any],
     description: str = "",
     **kwargs: Any,
 ) -> Pattern:
@@ -624,7 +616,7 @@ def sequential_pattern(
 
 def conditional_pattern(
     name: str,
-    conditions: Dict[str, Any],
+    conditions: dict[str, Any],
     description: str = "",
     **kwargs: Any,
 ) -> Pattern:

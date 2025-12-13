@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -62,7 +62,7 @@ class OperationMetrics:
 
     operation_id: str
     target: str
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     ended_at: datetime | None = None
 
     # API metrics
@@ -105,7 +105,7 @@ class OperationMetrics:
     @property
     def duration_seconds(self) -> float:
         """Operation duration in seconds."""
-        end = self.ended_at or datetime.now(timezone.utc)
+        end = self.ended_at or datetime.now(UTC)
         return (end - self.started_at).total_seconds()
 
     @property
@@ -163,7 +163,7 @@ class OperationMetrics:
 
     def complete(self) -> None:
         """Mark operation as complete."""
-        self.ended_at = datetime.now(timezone.utc)
+        self.ended_at = datetime.now(UTC)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

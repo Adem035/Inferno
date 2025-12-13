@@ -213,7 +213,7 @@ class UCB1Selector(SelectionAlgorithm[str]):
     ) -> dict[str, float]:
         """Get UCB scores for all actions."""
         if self._total_pulls == 0:
-            return {action: 1.0 for action in available_actions}
+            return dict.fromkeys(available_actions, 1.0)
 
         scores = {}
         for action in available_actions:

@@ -19,7 +19,7 @@ import hashlib
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -64,7 +64,7 @@ class KnowledgeEntry:
     knowledge_type: KnowledgeType
     source_agent: str  # Who discovered this
     target: str  # Which target this relates to
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Optional enrichment
     severity: Severity | None = None
@@ -358,7 +358,7 @@ class KnowledgeGraph:
     def _generate_id(self, content: str, source_agent: str) -> str:
         """Generate unique UUID for knowledge entry."""
         # Qdrant requires UUID format, not arbitrary hex strings
-        hash_input = f"{content}:{source_agent}:{datetime.now(timezone.utc).isoformat()}"
+        hash_input = f"{content}:{source_agent}:{datetime.now(UTC).isoformat()}"
         # Create a UUID from the hash (version 5, using DNS namespace as base)
         return str(uuid.uuid5(uuid.NAMESPACE_DNS, hash_input))
 

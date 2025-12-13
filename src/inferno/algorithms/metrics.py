@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -77,7 +77,7 @@ class SubagentOutcome:
             tokens_used=data.get("tokens_used", 0),
             findings_count=data.get("findings_count", 0),
             outcome=OutcomeType(data.get("outcome", "failure")),
-            started_at=datetime.fromisoformat(data["started_at"]) if "started_at" in data else datetime.now(timezone.utc),
+            started_at=datetime.fromisoformat(data["started_at"]) if "started_at" in data else datetime.now(UTC),
             duration_seconds=data.get("duration_seconds", 0.0),
             reward=data.get("reward", 0.0),
             severity_counts=data.get("severity_counts", {}),
@@ -91,7 +91,7 @@ class TriggerOutcome:
     trigger_name: str  # e.g., "finding_triggered", "error_triggered"
     agent_type: str
     context_features: dict[str, Any]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # What happened
     spawned: bool = True
@@ -123,7 +123,7 @@ class TriggerOutcome:
             trigger_name=data["trigger_name"],
             agent_type=data.get("agent_type", ""),
             context_features=data.get("context_features", {}),
-            timestamp=datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now(timezone.utc),
+            timestamp=datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now(UTC),
             spawned=data.get("spawned", True),
             outcome=outcome,
             reward=data.get("reward", 0.0),
@@ -150,7 +150,7 @@ class BranchOutcome:
     findings_count: int
 
     # Timing
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Learning signal
     reward: float = 0.0
@@ -186,7 +186,7 @@ class BranchOutcome:
             budget_remaining_percent=data.get("budget_remaining_percent", 1.0),
             outcome=OutcomeType(data.get("outcome", "failure")),
             findings_count=data.get("findings_count", 0),
-            timestamp=datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now(timezone.utc),
+            timestamp=datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now(UTC),
             reward=data.get("reward", 0.0),
         )
 
@@ -210,7 +210,7 @@ class AttackOutcome:
     confidence: float = 0.0
 
     # Timing
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     response_time: float = 0.0
 
     # Learning signal
@@ -246,7 +246,7 @@ class AttackOutcome:
             outcome=OutcomeType(data.get("outcome", "failure")),
             severity=data.get("severity"),
             confidence=data.get("confidence", 0.0),
-            timestamp=datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now(timezone.utc),
+            timestamp=datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now(UTC),
             response_time=data.get("response_time", 0.0),
             reward=data.get("reward", 0.0),
         )
@@ -615,7 +615,7 @@ class MetricsCollector:
                 "trigger_outcomes": [o.to_dict() for o in self._trigger_outcomes],
                 "branch_outcomes": [o.to_dict() for o in self._branch_outcomes],
                 "attack_outcomes": [o.to_dict() for o in self._attack_outcomes],
-                "saved_at": datetime.now(timezone.utc).isoformat(),
+                "saved_at": datetime.now(UTC).isoformat(),
             }
             history_file.write_text(json.dumps(data, indent=2))
         except Exception as e:

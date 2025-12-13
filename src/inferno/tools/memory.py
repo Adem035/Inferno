@@ -25,7 +25,7 @@ import os
 import re
 import uuid
 import warnings
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -262,7 +262,7 @@ class QdrantConnector:
             # Build payload
             payload = {
                 "text": text,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
             # Add metadata if provided
@@ -1304,7 +1304,7 @@ class MemoryTool(HybridTool):
 
         enriched_metadata = {
             "type": memory_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "operation_id": self._operation_id,
             **(metadata or {}),
         }
@@ -1540,7 +1540,7 @@ class MemoryTool(HybridTool):
 
         checkpoint_metadata = {
             "checkpoint": True,
-            "checkpoint_time": datetime.now(timezone.utc).isoformat(),
+            "checkpoint_time": datetime.now(UTC).isoformat(),
             **(metadata or {}),
         }
 

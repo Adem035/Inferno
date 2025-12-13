@@ -9,8 +9,9 @@ step to the next.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -30,11 +31,11 @@ class SequenceStep:
     agent: Any
     agent_name: str
     wait_for_previous: bool = True
-    timeout: Optional[float] = None
+    timeout: float | None = None
     retry_on_failure: bool = False
     max_retries: int = 1
-    condition: Optional[Callable[..., bool]] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    condition: Callable[..., bool] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -45,26 +46,26 @@ class StepResult:
     agent_name: str
     success: bool
     output: Any
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
     skipped: bool = False
-    skip_reason: Optional[str] = None
+    skip_reason: str | None = None
 
 
 @dataclass
 class SequentialExecutionContext:
     """Context passed between sequential steps."""
 
-    target: Optional[str] = None
-    operation_id: Optional[str] = None
+    target: str | None = None
+    operation_id: str | None = None
     current_step: int = 0
     total_steps: int = 0
-    previous_results: List[StepResult] = field(default_factory=list)
-    findings: List[Dict[str, Any]] = field(default_factory=list)
-    accumulated_context: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    previous_results: list[StepResult] = field(default_factory=list)
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    accumulated_context: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def get_previous_result(self) -> Optional[StepResult]:
+    def get_previous_result(self) -> StepResult | None:
         """Get the most recent step result."""
         if self.previous_results:
             return self.previous_results[-1]
@@ -81,7 +82,7 @@ class SequentialExecutionContext:
         """Add data to accumulated context."""
         self.accumulated_context[key] = value
 
-    def add_finding(self, finding: Dict[str, Any]) -> None:
+    def add_finding(self, finding: dict[str, Any]) -> None:
         """Add a security finding."""
         finding["step"] = self.current_step
         self.findings.append(finding)
@@ -96,11 +97,11 @@ class SequentialExecutionResult:
     completed_steps: int
     failed_steps: int
     skipped_steps: int
-    step_results: List[StepResult] = field(default_factory=list)
-    findings: List[Dict[str, Any]] = field(default_factory=list)
+    step_results: list[StepResult] = field(default_factory=list)
+    findings: list[dict[str, Any]] = field(default_factory=list)
     final_output: Any = None
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
 
     @property
@@ -110,7 +111,7 @@ class SequentialExecutionResult:
             return 0.0
         return (self.completed_steps / self.total_steps) * 100
 
-    def get_step_result(self, step_number: int) -> Optional[StepResult]:
+    def get_step_result(self, step_number: int) -> StepResult | None:
         """Get result for a specific step."""
         for result in self.step_results:
             if result.step_number == step_number:
@@ -131,7 +132,7 @@ class SequentialExecutor:
         default_timeout: float = 300.0,
         stop_on_failure: bool = True,
         retry_failed_steps: bool = False,
-        message_bus: Optional[MessageBus] = None,
+        message_bus: MessageBus | None = None,
     ) -> None:
         """
         Initialize the sequential executor.
@@ -151,9 +152,9 @@ class SequentialExecutor:
         self,
         pattern: Pattern,
         agent_executor: Callable[[Any, SequentialExecutionContext], Any],
-        initial_context: Optional[Dict[str, Any]] = None,
-        target: Optional[str] = None,
-        operation_id: Optional[str] = None,
+        initial_context: dict[str, Any] | None = None,
+        target: str | None = None,
+        operation_id: str | None = None,
     ) -> SequentialExecutionResult:
         """
         Execute a sequential pattern.
@@ -197,7 +198,7 @@ class SequentialExecutor:
             total_steps=len(steps),
         )
 
-        step_results: List[StepResult] = []
+        step_results: list[StepResult] = []
         completed = 0
         failed = 0
         skipped = 0
@@ -285,9 +286,9 @@ class SequentialExecutor:
             duration_seconds=duration,
         )
 
-    def _build_steps(self, pattern: Pattern) -> List[SequenceStep]:
+    def _build_steps(self, pattern: Pattern) -> list[SequenceStep]:
         """Build sequence steps from pattern."""
-        steps: List[SequenceStep] = []
+        steps: list[SequenceStep] = []
 
         for i, seq_item in enumerate(pattern.sequence):
             agent = seq_item.get("agent") if isinstance(seq_item, dict) else seq_item
@@ -318,7 +319,7 @@ class SequentialExecutor:
         timeout = step.timeout or self._default_timeout
         attempts = 0
         max_attempts = step.max_retries + 1 if step.retry_on_failure else 1
-        last_error: Optional[str] = None
+        last_error: str | None = None
 
         logger.debug(
             "executing_step",
@@ -354,7 +355,7 @@ class SequentialExecutor:
                         duration_seconds=duration,
                     )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"Timeout after {timeout}s"
                 logger.warning(
                     "step_timeout",

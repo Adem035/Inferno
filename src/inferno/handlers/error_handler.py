@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -95,7 +95,7 @@ class ErrorRecoveryHandler(EventHandler):
             error_type=error_type,
             message=error_message,
             tool_name=tool_name,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             context=event.data,
         )
         self._errors.append(record)

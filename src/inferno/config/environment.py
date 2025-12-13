@@ -12,7 +12,7 @@ import os
 import shutil
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -45,7 +45,7 @@ class EnvironmentInfo:
     user: str
     working_dir: Path
     inferno_version: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -59,7 +59,7 @@ class OperationContext:
     artifacts_dir: Path
     tools_dir: Path
     memory_dir: Path
-    start_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    start_time: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # Core security tools that Inferno can use
@@ -307,7 +307,7 @@ def _get_sqlmap_command() -> tuple[str, list[str]] | None:
         if path.exists():
             # Verify it's actually Python, not a bash wrapper
             try:
-                with open(path, "r") as f:
+                with open(path) as f:
                     first_line = f.readline()
                     if first_line.startswith("#!/bin/bash") or "exec " in first_line:
                         continue  # Skip bash wrappers
@@ -357,7 +357,7 @@ def generate_operation_id() -> str:
     Returns:
         Unique operation identifier string.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return f"OP_{now.strftime('%Y%m%d_%H%M%S')}"
 
 

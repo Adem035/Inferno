@@ -8,7 +8,7 @@ and budget monitoring during agent execution.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -90,7 +90,7 @@ class CheckpointHandler(EventHandler):
         checkpoint = Checkpoint(
             id=checkpoint_id,
             percent_complete=percent,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             findings_count=event.data.get("findings_count", 0),
             tokens_used=event.data.get("tokens_used", 0),
             turns_completed=event.data.get("turns", 0),
@@ -113,7 +113,7 @@ class CheckpointHandler(EventHandler):
             "turns": event.data.get("turns", 0),
             "tokens": event.data.get("tokens", 0),
             "findings": event.data.get("findings", 0),
-            "last_update": datetime.now(timezone.utc).isoformat(),
+            "last_update": datetime.now(UTC).isoformat(),
         })
 
         # Check for budget warning
@@ -205,7 +205,7 @@ class ProgressTracker(EventHandler):
     async def handle(self, event: Event) -> None:
         """Track progress events."""
         if self._start_time is None:
-            self._start_time = datetime.now(timezone.utc)
+            self._start_time = datetime.now(UTC)
 
         if event.type == EventType.TURN_START:
             phase = event.data.get("phase")
@@ -218,14 +218,14 @@ class ProgressTracker(EventHandler):
             # Update estimated completion based on progress
             percent = event.data.get("percent_complete", 0)
             if percent > 0 and self._start_time:
-                elapsed = (datetime.now(timezone.utc) - self._start_time).total_seconds()
+                elapsed = (datetime.now(UTC) - self._start_time).total_seconds()
                 self._estimated_completion = elapsed / (percent / 100) - elapsed
 
     def get_progress(self) -> dict[str, Any]:
         """Get current progress information."""
         elapsed = 0.0
         if self._start_time:
-            elapsed = (datetime.now(timezone.utc) - self._start_time).total_seconds()
+            elapsed = (datetime.now(UTC) - self._start_time).total_seconds()
 
         return {
             "started_at": self._start_time.isoformat() if self._start_time else None,

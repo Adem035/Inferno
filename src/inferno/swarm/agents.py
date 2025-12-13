@@ -15,11 +15,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
-
 
 # The 4 core tools that ALL agents use
 CORE_TOOLS = ["execute_command", "http_request", "memory", "think"]

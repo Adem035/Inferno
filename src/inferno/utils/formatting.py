@@ -7,7 +7,7 @@ tool outputs, findings, and reports.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -26,7 +26,7 @@ def format_timestamp(
         Formatted timestamp string.
     """
     if dt is None:
-        dt = datetime.now(timezone.utc)
+        dt = datetime.now(UTC)
     return dt.strftime(fmt)
 
 

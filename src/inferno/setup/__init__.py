@@ -16,12 +16,12 @@ from inferno.setup.installer import (
 )
 
 __all__ = [
+    "DockerManager",
+    "InstallResult",
     "SetupChecker",
     "SetupStatus",
-    "DockerManager",
-    "ToolInstaller",
     "ToolInfo",
-    "InstallResult",
-    "get_tool_installer",
+    "ToolInstaller",
     "ensure_tool_installed",
+    "get_tool_installer",
 ]

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -82,7 +82,7 @@ class AccuracyMetrics:
             return 1.0
         return self.flags_captured / self.flags_total
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "true_positives": self.true_positives,
@@ -105,7 +105,7 @@ class PerformanceMetrics:
     """Performance and resource usage metrics."""
     # Time metrics
     total_duration_seconds: float = 0.0
-    task_durations: List[float] = field(default_factory=list)
+    task_durations: list[float] = field(default_factory=list)
 
     # Token metrics
     total_input_tokens: int = 0
@@ -114,15 +114,15 @@ class PerformanceMetrics:
 
     # Cost metrics
     total_cost_usd: float = 0.0
-    task_costs: List[float] = field(default_factory=list)
+    task_costs: list[float] = field(default_factory=list)
 
     # Turn metrics
     total_turns: int = 0
-    task_turns: List[int] = field(default_factory=list)
+    task_turns: list[int] = field(default_factory=list)
 
     # Tool usage
     tool_calls: int = 0
-    tool_calls_by_type: Dict[str, int] = field(default_factory=dict)
+    tool_calls_by_type: dict[str, int] = field(default_factory=dict)
     tool_errors: int = 0
 
     @property
@@ -196,7 +196,7 @@ class PerformanceMetrics:
         if not success:
             self.tool_errors += 1
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "total_duration_seconds": round(self.total_duration_seconds, 2),
@@ -227,8 +227,8 @@ class BenchmarkMetrics:
     # Identification
     benchmark_id: str = ""
     benchmark_name: str = ""
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    completed_at: Optional[datetime] = None
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None
 
     # Task tracking
     tasks_total: int = 0
@@ -239,16 +239,16 @@ class BenchmarkMetrics:
     tasks_skipped: int = 0
 
     # Scores
-    task_scores: List[float] = field(default_factory=list)
-    weighted_scores: List[float] = field(default_factory=list)
+    task_scores: list[float] = field(default_factory=list)
+    weighted_scores: list[float] = field(default_factory=list)
 
     # Sub-metrics
     accuracy: AccuracyMetrics = field(default_factory=AccuracyMetrics)
     performance: PerformanceMetrics = field(default_factory=PerformanceMetrics)
 
     # Category breakdown
-    scores_by_category: Dict[str, List[float]] = field(default_factory=dict)
-    scores_by_difficulty: Dict[str, List[float]] = field(default_factory=dict)
+    scores_by_category: dict[str, list[float]] = field(default_factory=dict)
+    scores_by_difficulty: dict[str, list[float]] = field(default_factory=dict)
 
     @property
     def overall_score(self) -> float:
@@ -283,7 +283,7 @@ class BenchmarkMetrics:
         """Total benchmark duration."""
         if self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
-        return (datetime.now(timezone.utc) - self.started_at).total_seconds()
+        return (datetime.now(UTC) - self.started_at).total_seconds()
 
     def record_task_result(
         self,
@@ -320,9 +320,9 @@ class BenchmarkMetrics:
 
     def complete(self) -> None:
         """Mark benchmark as complete."""
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
 
-    def get_category_scores(self) -> Dict[str, float]:
+    def get_category_scores(self) -> dict[str, float]:
         """Get average scores by category."""
         return {
             cat: statistics.mean(scores) * 100
@@ -330,7 +330,7 @@ class BenchmarkMetrics:
             if scores
         }
 
-    def get_difficulty_scores(self) -> Dict[str, float]:
+    def get_difficulty_scores(self) -> dict[str, float]:
         """Get average scores by difficulty."""
         return {
             diff: statistics.mean(scores) * 100
@@ -338,7 +338,7 @@ class BenchmarkMetrics:
             if scores
         }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to comprehensive dictionary."""
         return {
             "benchmark_id": self.benchmark_id,
@@ -439,7 +439,7 @@ class MetricsCollector:
             benchmark_id=benchmark_id,
             benchmark_name=benchmark_name,
         )
-        self._task_metrics: Dict[str, Dict[str, Any]] = {}
+        self._task_metrics: dict[str, dict[str, Any]] = {}
 
     @property
     def metrics(self) -> BenchmarkMetrics:
@@ -453,7 +453,7 @@ class MetricsCollector:
     def start_task(self, task_id: str) -> None:
         """Mark task as started."""
         self._task_metrics[task_id] = {
-            "started_at": datetime.now(timezone.utc),
+            "started_at": datetime.now(UTC),
             "tool_calls": [],
         }
 
@@ -494,7 +494,7 @@ class MetricsCollector:
         duration = 0.0
         if task_id in self._task_metrics:
             started = self._task_metrics[task_id]["started_at"]
-            duration = (datetime.now(timezone.utc) - started).total_seconds()
+            duration = (datetime.now(UTC) - started).total_seconds()
 
         # Record to metrics
         self._metrics.record_task_result(
@@ -551,6 +551,6 @@ class MetricsCollector:
         """Generate metrics report."""
         return self._metrics.generate_report()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Get metrics as dictionary."""
         return self._metrics.to_dict()

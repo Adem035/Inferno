@@ -25,16 +25,15 @@ import copy
 import os
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Generic,
     TypeVar,
-    Union,
     cast,
 )
 
@@ -99,7 +98,7 @@ class NextStepFinalOutput:
 @dataclass
 class NextStepHandoff:
     """Agent handed off to another agent."""
-    new_agent: "Agent"
+    new_agent: Agent
     handoff_data: dict[str, Any] = field(default_factory=dict)
 
 
@@ -125,14 +124,14 @@ class MaxTurnsExceeded(RunnerException):
 
 class InputGuardrailTriggered(RunnerException):
     """Raised when input guardrail blocks execution."""
-    def __init__(self, result: "InputGuardrailResult"):
+    def __init__(self, result: InputGuardrailResult):
         self.result = result
         super().__init__(f"Input guardrail triggered: {result.guardrail_name}")
 
 
 class OutputGuardrailTriggered(RunnerException):
     """Raised when output guardrail blocks execution."""
-    def __init__(self, result: "OutputGuardrailResult"):
+    def __init__(self, result: OutputGuardrailResult):
         self.result = result
         super().__init__(f"Output guardrail triggered: {result.guardrail_name}")
 
@@ -182,9 +181,9 @@ class InputGuardrail(ABC, Generic[TContext]):
     @abstractmethod
     async def run(
         self,
-        agent: "Agent",
+        agent: Agent,
         input_data: str | list[Any],
-        context: "RunContextWrapper[TContext]",
+        context: RunContextWrapper[TContext],
     ) -> InputGuardrailResult:
         """Run the guardrail check."""
         ...
@@ -206,9 +205,9 @@ class OutputGuardrail(ABC, Generic[TContext]):
     @abstractmethod
     async def run(
         self,
-        agent: "Agent",
+        agent: Agent,
         output_data: Any,
-        context: "RunContextWrapper[TContext]",
+        context: RunContextWrapper[TContext],
     ) -> OutputGuardrailResult:
         """Run the guardrail check."""
         ...
@@ -226,8 +225,8 @@ class OutputGuardrail(ABC, Generic[TContext]):
 class HandoffInputData:
     """Input data for handoff filtering."""
     input_history: tuple[Any, ...] | str
-    pre_handoff_items: tuple["RunItem", ...]
-    new_items: tuple["RunItem", ...]
+    pre_handoff_items: tuple[RunItem, ...]
+    new_items: tuple[RunItem, ...]
 
 
 HandoffInputFilter = Callable[[HandoffInputData], HandoffInputData]
@@ -239,23 +238,23 @@ class Handoff:
     agent_name: str
     tool_name: str
     description: str
-    agent: "Agent"
+    agent: Agent
     input_filter: HandoffInputFilter | None = None
 
     async def on_invoke_handoff(
         self,
-        context: "RunContextWrapper",
+        context: RunContextWrapper,
         arguments: str,
-    ) -> "Agent":
+    ) -> Agent:
         """Invoke the handoff and return the new agent."""
         return self.agent
 
-    def get_transfer_message(self, agent: "Agent") -> str:
+    def get_transfer_message(self, agent: Agent) -> str:
         """Get the message to show on handoff."""
         return f"Transferred to {agent.name}"
 
 
-def handoff(agent: "Agent") -> Handoff:
+def handoff(agent: Agent) -> Handoff:
     """Create a handoff to an agent."""
     tool_name = f"transfer_to_{agent.name.lower().replace(' ', '_')}"
     return Handoff(
@@ -273,7 +272,7 @@ def handoff(agent: "Agent") -> Handoff:
 @dataclass
 class RunItem:
     """Base class for items generated during a run."""
-    agent: "Agent"
+    agent: Agent
 
     def to_input_item(self) -> dict[str, Any]:
         """Convert to input item format."""
@@ -311,8 +310,8 @@ class HandoffCallItem(RunItem):
 @dataclass
 class HandoffOutputItem(RunItem):
     """Output from a handoff."""
-    source_agent: "Agent"
-    target_agent: "Agent"
+    source_agent: Agent
+    target_agent: Agent
     raw_item: Any
 
 
@@ -328,7 +327,7 @@ class Usage:
     output_tokens: int = 0
     total_tokens: int = 0
 
-    def add(self, other: "Usage") -> None:
+    def add(self, other: Usage) -> None:
         """Add another usage to this one."""
         self.requests += other.requests
         self.input_tokens += other.input_tokens
@@ -351,7 +350,7 @@ class ModelResponse:
 @dataclass
 class FunctionToolResult:
     """Result from executing a function tool."""
-    tool: "Tool"
+    tool: Tool
     output: Any
     run_item: ToolCallOutputItem
 
@@ -374,7 +373,7 @@ class Tool(ABC):
     @abstractmethod
     async def on_invoke_tool(
         self,
-        context: "RunContextWrapper",
+        context: RunContextWrapper,
         arguments: str,
     ) -> Any:
         """Execute the tool."""
@@ -406,7 +405,7 @@ class FunctionTool(Tool):
 
     async def on_invoke_tool(
         self,
-        context: "RunContextWrapper",
+        context: RunContextWrapper,
         arguments: str,
     ) -> Any:
         import json
@@ -429,7 +428,7 @@ class ModelSettings:
     max_tokens: int = 4096
     tool_choice: str | None = None
 
-    def resolve(self, other: "ModelSettings | None") -> "ModelSettings":
+    def resolve(self, other: ModelSettings | None) -> ModelSettings:
         """Resolve settings with another set of settings."""
         if not other:
             return self
@@ -447,16 +446,16 @@ class AgentHooks(Generic[TContext]):
 
     async def on_start(
         self,
-        context: "RunContextWrapper[TContext]",
-        agent: "Agent[TContext]",
+        context: RunContextWrapper[TContext],
+        agent: Agent[TContext],
     ) -> None:
         """Called when agent starts."""
         pass
 
     async def on_end(
         self,
-        context: "RunContextWrapper[TContext]",
-        agent: "Agent[TContext]",
+        context: RunContextWrapper[TContext],
+        agent: Agent[TContext],
         output: Any,
     ) -> None:
         """Called when agent ends."""
@@ -464,8 +463,8 @@ class AgentHooks(Generic[TContext]):
 
     async def on_tool_start(
         self,
-        context: "RunContextWrapper[TContext]",
-        agent: "Agent[TContext]",
+        context: RunContextWrapper[TContext],
+        agent: Agent[TContext],
         tool: Tool,
     ) -> None:
         """Called before tool execution."""
@@ -473,8 +472,8 @@ class AgentHooks(Generic[TContext]):
 
     async def on_tool_end(
         self,
-        context: "RunContextWrapper[TContext]",
-        agent: "Agent[TContext]",
+        context: RunContextWrapper[TContext],
+        agent: Agent[TContext],
         tool: Tool,
         result: Any,
     ) -> None:
@@ -483,9 +482,9 @@ class AgentHooks(Generic[TContext]):
 
     async def on_handoff(
         self,
-        context: "RunContextWrapper[TContext]",
-        agent: "Agent[TContext]",
-        source: "Agent[TContext]",
+        context: RunContextWrapper[TContext],
+        agent: Agent[TContext],
+        source: Agent[TContext],
     ) -> None:
         """Called when receiving a handoff."""
         pass
@@ -503,7 +502,7 @@ class Agent(Generic[TContext]):
         name: str,
         instructions: str | Callable[[TContext], str] | None = None,
         tools: list[Tool] | None = None,
-        handoffs: list[Union["Agent", Handoff]] | None = None,
+        handoffs: list[Agent | Handoff] | None = None,
         output_type: type | None = None,
         model: str | None = None,
         model_settings: ModelSettings | None = None,
@@ -528,7 +527,7 @@ class Agent(Generic[TContext]):
 
     async def get_system_prompt(
         self,
-        context: "RunContextWrapper[TContext]",
+        context: RunContextWrapper[TContext],
     ) -> str | None:
         """Get the system prompt for this agent."""
         if self._instructions is None:
@@ -645,11 +644,11 @@ class Span:
 
     def start(self, mark_as_current: bool = False) -> None:
         """Start the span."""
-        self._started_at = datetime.now(timezone.utc)
+        self._started_at = datetime.now(UTC)
 
     def finish(self, reset_current: bool = False) -> None:
         """Finish the span."""
-        self._ended_at = datetime.now(timezone.utc)
+        self._ended_at = datetime.now(UTC)
 
     def set_error(self, error: SpanError) -> None:
         """Set error on the span."""
@@ -738,7 +737,7 @@ class TraceCtxManager:
         self.metadata = metadata
         self.disabled = disabled
 
-    def __enter__(self) -> "TraceCtxManager":
+    def __enter__(self) -> TraceCtxManager:
         global _current_trace
         current_trace = get_current_trace()
         if not current_trace:
@@ -768,7 +767,7 @@ class ModelProvider(ABC):
     """Abstract base class for model providers."""
 
     @abstractmethod
-    def get_model(self, model_name: str) -> "Model":
+    def get_model(self, model_name: str) -> Model:
         """Get a model by name."""
         ...
 
@@ -796,9 +795,9 @@ class AnthropicModelProvider(ModelProvider):
 
     def __init__(self, settings: InfernoSettings | None = None):
         self._settings = settings or InfernoSettings()
-        self._models: dict[str, "AnthropicModel"] = {}
+        self._models: dict[str, AnthropicModel] = {}
 
-    def get_model(self, model_name: str) -> "AnthropicModel":
+    def get_model(self, model_name: str) -> AnthropicModel:
         """Get an Anthropic model."""
         if model_name not in self._models:
             self._models[model_name] = AnthropicModel(model_name, self._settings)
@@ -811,9 +810,9 @@ class AnthropicModel(Model):
     def __init__(self, model_name: str, settings: InfernoSettings):
         self.model_name = model_name
         self._settings = settings
-        self._client: "AsyncAnthropic | None" = None
+        self._client: AsyncAnthropic | None = None
 
-    async def _get_client(self) -> "AsyncAnthropic":
+    async def _get_client(self) -> AsyncAnthropic:
         """Get or create the Anthropic client."""
         if self._client is None:
             from anthropic import AsyncAnthropic
@@ -877,7 +876,7 @@ class AnthropicModel(Model):
             referenceable_id=response.id,
         )
 
-    def _build_messages(self, input_items: list[Any]) -> list["MessageParam"]:
+    def _build_messages(self, input_items: list[Any]) -> list[MessageParam]:
         """Build messages from input items."""
         messages = []
         for item in input_items:
@@ -1256,7 +1255,7 @@ class Runner:
                         )
                     elif isinstance(turn_result.next_step, NextStepHandoff):
                         previous_agent = current_agent
-                        current_agent = cast(Agent[TContext], turn_result.next_step.new_agent)
+                        current_agent = cast("Agent[TContext]", turn_result.next_step.new_agent)
 
                         current_span.finish(reset_current=True)
                         current_span = None

@@ -10,8 +10,8 @@ supporting OAuth authentication.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -22,9 +22,6 @@ from inferno.swarm.agents import (
     get_agent_config,
 )
 from inferno.tools.base import CoreTool, ToolCategory, ToolExample, ToolResult
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -298,7 +295,7 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
             operation_id=self._operation_id,
         )
 
-        subagent_id = f"{agent_type}_{datetime.now(timezone.utc).timestamp()}"
+        subagent_id = f"{agent_type}_{datetime.now(UTC).timestamp()}"
         print(f"[SUBAGENT] Starting {config.name} for: {task[:80]}...")
 
         try:

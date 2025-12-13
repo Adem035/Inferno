@@ -7,10 +7,11 @@ for evaluating agent security assessment capabilities.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -65,11 +66,11 @@ class ExpectedFinding:
 @dataclass
 class TaskValidation:
     """Validation criteria for a benchmark task."""
-    expected_findings: List[ExpectedFinding] = field(default_factory=list)
-    expected_flags: List[str] = field(default_factory=list)  # For CTF tasks
+    expected_findings: list[ExpectedFinding] = field(default_factory=list)
+    expected_flags: list[str] = field(default_factory=list)  # For CTF tasks
     success_criteria: str = ""  # Description of success
     partial_success_threshold: float = 0.5  # Min score for partial success
-    custom_validator: Optional[Callable[[Dict[str, Any]], float]] = None
+    custom_validator: Callable[[dict[str, Any]], float] | None = None
 
 
 @dataclass
@@ -90,7 +91,7 @@ class BenchmarkTask:
     target_url: str = ""
     target_host: str = ""
     target_port: int = 0
-    target_config: Dict[str, Any] = field(default_factory=dict)
+    target_config: dict[str, Any] = field(default_factory=dict)
 
     # Execution constraints
     max_turns: int = 100
@@ -102,15 +103,15 @@ class BenchmarkTask:
     validation: TaskValidation = field(default_factory=TaskValidation)
 
     # Hints (for difficulty scaling)
-    hints: List[str] = field(default_factory=list)
+    hints: list[str] = field(default_factory=list)
     hint_penalty: float = 0.1  # Score reduction per hint used
 
     # Metadata
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     author: str = ""
     source: str = ""  # e.g., "HackTheBox", "PortSwigger", "Custom"
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Runtime state
     status: TaskStatus = TaskStatus.PENDING
@@ -128,7 +129,7 @@ class BenchmarkTask:
             return f"{self.target_host}:{self.target_port}" if self.target_port else self.target_host
         return ""
 
-    def use_hint(self) -> Optional[str]:
+    def use_hint(self) -> str | None:
         """Use the next available hint."""
         if self.hints_used < len(self.hints):
             hint = self.hints[self.hints_used]
@@ -179,9 +180,9 @@ class TaskResult:
 
     # Details
     hints_used: int = 0
-    error: Optional[str] = None
-    findings_detail: List[Dict[str, Any]] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    findings_detail: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def accuracy(self) -> float:
@@ -307,7 +308,7 @@ def create_ctf_task(
     target: str,
     expected_flag: str,
     difficulty: TaskDifficulty = TaskDifficulty.MEDIUM,
-    hints: List[str] = None,
+    hints: list[str] = None,
 ) -> BenchmarkTask:
     """Create a CTF-style benchmark task."""
     return BenchmarkTask(
@@ -332,7 +333,7 @@ def create_ctf_task(
 def create_recon_task(
     task_id: str,
     target: str,
-    expected_subdomains: List[str] = None,
+    expected_subdomains: list[str] = None,
     difficulty: TaskDifficulty = TaskDifficulty.EASY,
 ) -> BenchmarkTask:
     """Create a reconnaissance benchmark task."""

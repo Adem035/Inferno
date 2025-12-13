@@ -9,8 +9,9 @@ that can be executed concurrently.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -20,9 +21,6 @@ from inferno.patterns.pattern import (
     PatternType,
     parallel_pattern,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -34,9 +32,9 @@ class ParallelExecutionResult:
     agent_name: str
     success: bool
     output: str
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -47,7 +45,7 @@ class ParallelBatchResult:
     total_agents: int
     successful: int
     failed: int
-    results: List[ParallelExecutionResult] = field(default_factory=list)
+    results: list[ParallelExecutionResult] = field(default_factory=list)
     total_duration_seconds: float = 0.0
 
     @property
@@ -57,11 +55,11 @@ class ParallelBatchResult:
             return 0.0
         return (self.successful / self.total_agents) * 100
 
-    def get_failures(self) -> List[ParallelExecutionResult]:
+    def get_failures(self) -> list[ParallelExecutionResult]:
         """Get all failed execution results."""
         return [r for r in self.results if not r.success]
 
-    def get_successes(self) -> List[ParallelExecutionResult]:
+    def get_successes(self) -> list[ParallelExecutionResult]:
         """Get all successful execution results."""
         return [r for r in self.results if r.success]
 
@@ -76,7 +74,7 @@ class ParallelExecutor:
 
     def __init__(
         self,
-        max_concurrent: Optional[int] = None,
+        max_concurrent: int | None = None,
         default_timeout: float = 300.0,
         retry_on_failure: bool = False,
         max_retries: int = 1,
@@ -94,13 +92,13 @@ class ParallelExecutor:
         self._default_timeout = default_timeout
         self._retry_on_failure = retry_on_failure
         self._max_retries = max_retries
-        self._semaphore: Optional[asyncio.Semaphore] = None
+        self._semaphore: asyncio.Semaphore | None = None
 
     async def execute_pattern(
         self,
         pattern: Pattern,
-        agent_executor: Callable[[ParallelAgentConfig, Dict[str, Any]], Any],
-        context: Optional[Dict[str, Any]] = None,
+        agent_executor: Callable[[ParallelAgentConfig, dict[str, Any]], Any],
+        context: dict[str, Any] | None = None,
     ) -> ParallelBatchResult:
         """
         Execute a parallel pattern.
@@ -164,7 +162,7 @@ class ParallelExecutor:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Process results
-        execution_results: List[ParallelExecutionResult] = []
+        execution_results: list[ParallelExecutionResult] = []
         successful = 0
         failed = 0
 
@@ -218,8 +216,8 @@ class ParallelExecutor:
     async def _execute_with_semaphore(
         self,
         config: ParallelAgentConfig,
-        executor: Callable[[ParallelAgentConfig, Dict[str, Any]], Any],
-        context: Dict[str, Any],
+        executor: Callable[[ParallelAgentConfig, dict[str, Any]], Any],
+        context: dict[str, Any],
         unified_context: bool,
     ) -> ParallelExecutionResult:
         """Execute a single agent with semaphore control."""
@@ -240,8 +238,8 @@ class ParallelExecutor:
     async def _execute_single(
         self,
         config: ParallelAgentConfig,
-        executor: Callable[[ParallelAgentConfig, Dict[str, Any]], Any],
-        context: Dict[str, Any],
+        executor: Callable[[ParallelAgentConfig, dict[str, Any]], Any],
+        context: dict[str, Any],
         unified_context: bool,
         start_time: float,
     ) -> ParallelExecutionResult:
@@ -250,7 +248,7 @@ class ParallelExecutor:
 
         timeout = config.timeout or self._default_timeout
         attempts = 0
-        last_error: Optional[str] = None
+        last_error: str | None = None
 
         while attempts <= self._max_retries:
             try:
@@ -284,7 +282,7 @@ class ParallelExecutor:
                         duration_seconds=duration,
                     )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"Timeout after {timeout}s"
                 logger.warning(
                     "agent_timeout",

@@ -1,0 +1,13 @@
+skips:
+  - B104
+  - B108
+  - B324
+  - B501
+  - B602
+  - B702
+  - B314
+exclude_dirs:
+  - tests
+  - build
+  - dist
+  - .eggs

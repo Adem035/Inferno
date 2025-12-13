@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ class CheckpointData:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CheckpointData":
+    def from_dict(cls, data: dict[str, Any]) -> CheckpointData:
         """Create from dictionary."""
         return cls(**data)
 
@@ -122,7 +122,7 @@ class CheckpointManager:
 
     def _generate_checkpoint_id(self, turn: int) -> str:
         """Generate a unique checkpoint ID."""
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         return f"checkpoint_{turn:04d}_{timestamp}"
 
     async def save(
@@ -175,7 +175,7 @@ class CheckpointManager:
             checkpoint_id=checkpoint_id,
             operation_id=operation_id,
             target=target,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             turn=turn,
             total_turns=total_turns,
             budget_percent=budget_percent,

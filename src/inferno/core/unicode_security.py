@@ -13,7 +13,6 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Set
 from urllib.parse import urlparse
 
 import structlog
@@ -38,7 +37,7 @@ class HomographResult:
     unicode_name: str
     unicode_category: str
     script: str
-    lookalike_ascii: Optional[str]
+    lookalike_ascii: str | None
     risk_level: RiskLevel
     description: str
 
@@ -50,10 +49,10 @@ class SecurityCheckResult:
     normalized: str
     is_safe: bool
     risk_level: RiskLevel
-    homographs: List[HomographResult]
+    homographs: list[HomographResult]
     mixed_scripts: bool
-    scripts_found: Set[str]
-    recommendations: List[str]
+    scripts_found: set[str]
+    recommendations: list[str]
 
 
 # Cyrillic characters that look like Latin characters
@@ -164,18 +163,14 @@ def get_script(char: str) -> str:
         else:
             # Check category for common characters
             category = unicodedata.category(char)
-            if category.startswith('N'):  # Numbers
-                return 'Common'
-            elif category.startswith('P') or category.startswith('S'):  # Punctuation/Symbols
-                return 'Common'
-            elif category == 'Zs':  # Space
+            if category.startswith('N') or category.startswith('P') or category.startswith('S') or category == 'Zs':  # Numbers
                 return 'Common'
             return 'Other'
     except Exception:
         return 'Unknown'
 
 
-def detect_homographs(text: str) -> List[HomographResult]:
+def detect_homographs(text: str) -> list[HomographResult]:
     """
     Detect potential homograph attacks in text.
 
@@ -331,9 +326,7 @@ def check_url_security(url: str) -> SecurityCheckResult:
     # Determine overall risk
     if any(h.risk_level == RiskLevel.CRITICAL for h in homographs):
         risk_level = RiskLevel.CRITICAL
-    elif any(h.risk_level == RiskLevel.HIGH for h in homographs):
-        risk_level = RiskLevel.HIGH
-    elif mixed_scripts:
+    elif any(h.risk_level == RiskLevel.HIGH for h in homographs) or mixed_scripts:
         risk_level = RiskLevel.HIGH
     elif any(h.risk_level == RiskLevel.MEDIUM for h in homographs):
         risk_level = RiskLevel.MEDIUM

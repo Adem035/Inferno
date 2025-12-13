@@ -12,9 +12,10 @@ Supports both OpenAI reasoning models (o1, o3-mini) and Claude models.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any
 
 import structlog
 
@@ -46,7 +47,7 @@ class ReasonerOutput:
     model_used: str = ""
 
     @classmethod
-    def parse_response(cls, response: str, model: str = "") -> "ReasonerOutput":
+    def parse_response(cls, response: str, model: str = "") -> ReasonerOutput:
         """
         Parse a raw model response into structured output.
 
@@ -237,8 +238,8 @@ class ReasonerAgent:
     def __init__(
         self,
         name: str = "Reasoner",
-        model: Optional[str] = None,
-        instructions: Optional[Union[str, Callable[[], str]]] = None,
+        model: str | None = None,
+        instructions: str | Callable[[], str] | None = None,
         reasoning_effort: str = "high",
     ) -> None:
         """
@@ -294,8 +295,8 @@ class ReasonerAgent:
     async def analyze(
         self,
         context: str,
-        question: Optional[str] = None,
-        history: Optional[list[dict[str, str]]] = None,
+        question: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> ReasonerOutput:
         """
         Analyze a security situation and provide structured reasoning.
@@ -451,8 +452,8 @@ class ReasonerAgent:
     def analyze_sync(
         self,
         context: str,
-        question: Optional[str] = None,
-        history: Optional[list[dict[str, str]]] = None,
+        question: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> ReasonerOutput:
         """
         Synchronous wrapper for analyze().
@@ -487,8 +488,8 @@ class ReasonerAgent:
 
 def create_reasoner_agent(
     name: str = "Reasoner",
-    model: Optional[str] = None,
-    instructions: Optional[Union[str, Callable[[], str]]] = None,
+    model: str | None = None,
+    instructions: str | Callable[[], str] | None = None,
     reasoning_effort: str = "high",
 ) -> ReasonerAgent:
     """
@@ -534,7 +535,7 @@ def create_reasoner_agent(
 
 
 # Module-level singleton for convenience
-_reasoner_agent: Optional[ReasonerAgent] = None
+_reasoner_agent: ReasonerAgent | None = None
 
 
 def get_reasoner_agent() -> ReasonerAgent:
@@ -554,7 +555,7 @@ def get_reasoner_agent() -> ReasonerAgent:
 
 def transfer_to_reasoner(
     context: str,
-    question: Optional[str] = None,
+    question: str | None = None,
 ) -> ReasonerOutput:
     """
     Transfer analysis to the reasoner agent and get structured output.

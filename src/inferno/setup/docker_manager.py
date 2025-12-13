@@ -570,7 +570,7 @@ class DockerManager:
             Dict mapping tool names to success status.
         """
         if not self.ensure_kali_running():
-            return {tool: False for tool in tools}
+            return dict.fromkeys(tools, False)
 
         results = {}
         for tool in tools:
@@ -643,7 +643,7 @@ class DockerManager:
                 "success": proc.returncode == 0,
             }
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
                 "stdout": "",
                 "stderr": f"Command timed out after {timeout}s",

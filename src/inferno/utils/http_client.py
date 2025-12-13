@@ -13,15 +13,13 @@ making HTTP requests. This ensures:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from typing import Any
 
 import httpx
 import structlog
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -125,7 +123,7 @@ class InfernoHTTPClient:
         self._config = config or HTTPClientConfig()
         self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "InfernoHTTPClient":
+    async def __aenter__(self) -> InfernoHTTPClient:
         """Async context manager entry."""
         await self._ensure_client()
         return self
@@ -265,7 +263,7 @@ class InfernoHTTPClient:
                 if attempt < self._config.retry_count:
                     await asyncio.sleep(self._config.retry_delay)
 
-            except httpx.TooManyRedirects as e:
+            except httpx.TooManyRedirects:
                 return HTTPError(
                     error_type="redirect",
                     message="Too many redirects",
