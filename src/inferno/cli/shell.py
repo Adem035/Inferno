@@ -948,10 +948,12 @@ class InfernoShell:
                 if display_name == "swarm":
                     agent_type = params.get("agent_type", "unknown")
                     task = params.get("task", "")[:60]
-                    console.print(f"\n[bold magenta]🚀 SPAWNING SWARM: {agent_type}[/bold magenta]")
-                    console.print(f"  [dim]Task: {task}...[/dim]")
+                    console.print(f"\n[bold magenta]┌─ 🚀 SPAWNING SUBAGENT: {agent_type} ─────────────────────────[/bold magenta]")
+                    console.print(f"[magenta]│[/magenta]  [dim]Task: {task}...[/dim]")
+                    console.print("[magenta]│[/magenta]  [dim italic]Subagent commands will show with [cyan]»[/cyan] prefix[/dim italic]")
                     return
 
+                # Main agent command indicator: ▶ (yellow)
                 if "command" in params:
                     cmd = params.get("command", "")
                     desc = params.get("description", "")

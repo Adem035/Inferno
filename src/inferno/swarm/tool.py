@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
+from rich.console import Console
 
 from inferno.swarm.agents import (
     SubAgentConfig,
@@ -24,6 +25,7 @@ from inferno.swarm.agents import (
 from inferno.tools.base import CoreTool, ToolCategory, ToolExample, ToolResult
 
 logger = structlog.get_logger(__name__)
+console = Console()
 
 
 class SwarmTool(CoreTool):
@@ -296,7 +298,8 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
         )
 
         subagent_id = f"{agent_type}_{datetime.now(UTC).timestamp()}"
-        print(f"[SUBAGENT] Starting {config.name} for: {task[:80]}...")
+        console.print(f"[magenta]│[/magenta] [bold cyan]» Starting {config.name}[/bold cyan]")
+        console.print(f"[magenta]│[/magenta]   [dim]{task[:80]}...[/dim]")
 
         try:
             # Import Claude SDK
@@ -377,7 +380,7 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
                 async for message in client.receive_response():
                     if isinstance(message, AssistantMessage):
                         turns += 1
-                        print(f"  [SUBAGENT:{agent_type}] Turn {turns}/{config.max_turns}")
+                        console.print(f"[magenta]│[/magenta] [dim]Turn {turns}/{config.max_turns}[/dim]")
 
                         for block in message.content:
                             if isinstance(block, TextBlock):
@@ -393,20 +396,28 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
                                     objective_met = True
 
                             elif isinstance(block, ToolUseBlock):
-                                print(f"    🔧 {block.name}")
+                                # Subagent tool calls: » prefix (cyan) to distinguish from main agent ▶
+                                tool_name = block.name.replace("mcp__inferno__", "").replace("mcp__", "")
+                                tool_input = getattr(block, 'input', {})
+                                if isinstance(tool_input, dict) and "command" in tool_input:
+                                    cmd = tool_input.get("command", "")[:60]
+                                    console.print(f"[magenta]│[/magenta] [bold cyan]» {tool_name}[/bold cyan]")
+                                    console.print(f"[magenta]│[/magenta]   [green]{cmd}[/green]")
+                                else:
+                                    console.print(f"[magenta]│[/magenta] [bold cyan]» {tool_name}[/bold cyan]")
 
                             elif isinstance(block, ThinkingBlock):
                                 # Show thinking progress
                                 if block.thinking:
-                                    preview = block.thinking[:100].replace('\n', ' ')
-                                    print(f"    💭 {preview}...")
+                                    preview = block.thinking[:80].replace('\n', ' ')
+                                    console.print(f"[magenta]│[/magenta] [dim italic]💭 {preview}...[/dim italic]")
 
                     elif isinstance(message, ResultMessage):
                         # Agent completed
                         objective_met = True
                         break
 
-            print(f"[SUBAGENT] {config.name} completed - turns={turns}, findings={len(findings)}")
+            console.print(f"[magenta]└─[/magenta] [bold green]✓ {config.name} completed[/bold green] [dim](turns={turns}, findings={len(findings)})[/dim]")
 
             # Build output
             output_parts = [
