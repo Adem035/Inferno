@@ -473,6 +473,45 @@ class AttackSelector:
         else:
             self._failure_history[attack_name] = self._failure_history.get(attack_name, 0) + 1
 
+    def boost_attack_priority(
+        self,
+        attack_type: str,
+        boost: float = 0.1,
+        reason: str = "",
+    ) -> None:
+        """
+        Dynamically boost an attack type's priority based on hints or evidence.
+
+        This is used by HintExtractor to increase priority of attacks
+        that are suggested by response content.
+
+        Args:
+            attack_type: Name of the attack type to boost
+            boost: Amount to increase priority (0.0-1.0)
+            reason: Why this boost is being applied
+        """
+        # Track boosts for dynamic prioritization
+        if not hasattr(self, "_priority_boosts"):
+            self._priority_boosts: dict[str, float] = {}
+
+        current_boost = self._priority_boosts.get(attack_type, 0.0)
+        new_boost = min(current_boost + boost, 1.0)  # Cap at 1.0
+        self._priority_boosts[attack_type] = new_boost
+
+        logger.info(
+            "attack_priority_boosted",
+            attack_type=attack_type,
+            boost=boost,
+            total_boost=new_boost,
+            reason=reason,
+        )
+
+    def get_priority_boost(self, attack_name: str) -> float:
+        """Get the current priority boost for an attack type."""
+        if not hasattr(self, "_priority_boosts"):
+            return 0.0
+        return self._priority_boosts.get(attack_name, 0.0)
+
     def get_techniques_for_attack(self, attack_name: str) -> list[str]:
         """Get specific techniques for an attack."""
         # Check tech-specific attacks

@@ -36,8 +36,9 @@ classifiers = [
 ]
 
 dependencies = [
-    # Claude Agent SDK
+    # Claude API and Agent SDK
     "anthropic>=0.40.0",
+    "claude-agent-sdk>=0.1.16",  # Claude Agent SDK
 
     # Memory: Mem0 with Qdrant backend
     "mem0ai>=0.1.0",
