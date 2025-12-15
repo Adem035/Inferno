@@ -610,7 +610,7 @@ def search_episodic_memory(
     target: str,
     query: str,
     limit: int = 5,
-    threshold: float = 0.5,
+    threshold: float = 0.25,  # Lowered from 0.5 for better recall
 ) -> list[dict[str, Any]]:
     """
     Search episodic memory for a specific target.
@@ -619,7 +619,7 @@ def search_episodic_memory(
         target: Target identifier.
         query: Search query.
         limit: Maximum results.
-        threshold: Minimum similarity score.
+        threshold: Minimum similarity score (default 0.25 for good recall).
 
     Returns:
         List of matching documents.
@@ -638,7 +638,7 @@ def search_episodic_memory(
 def search_semantic_memory(
     query: str,
     limit: int = 5,
-    threshold: float = 0.5,
+    threshold: float = 0.25,  # Lowered from 0.5 for better recall
 ) -> list[dict[str, Any]]:
     """
     Search semantic memory (global knowledge).
@@ -646,7 +646,7 @@ def search_semantic_memory(
     Args:
         query: Search query.
         limit: Maximum results.
-        threshold: Minimum similarity score.
+        threshold: Minimum similarity score (default 0.25 for good recall).
 
     Returns:
         List of matching documents.
@@ -662,13 +662,103 @@ def search_semantic_memory(
     )
 
 
+def find_similar_targets(target: str) -> list[str]:
+    """
+    Find similar/related targets that might have relevant memories.
+
+    This handles cases where the same target is accessed via different URLs:
+    - http://10.10.10.1:8080 vs http://10.10.10.1
+    - example.com vs www.example.com
+    - With or without protocol prefix
+
+    Args:
+        target: The target identifier.
+
+    Returns:
+        List of potential similar target collection names to search.
+    """
+    similar = []
+    sanitized = _sanitize_target_id(target)
+
+    # Get the base collection name
+    base_collection = f"target_{sanitized}"
+    similar.append(base_collection)
+
+    # Try to find related collections in Qdrant
+    try:
+        connector = _get_qdrant_connector()
+        client = connector._get_client()
+
+        # List all collections
+        collections = client.get_collections().collections
+
+        for col in collections:
+            col_name = col.name
+            # Skip non-target collections
+            if not col_name.startswith("target_"):
+                continue
+            # Skip exact match (already added)
+            if col_name == base_collection:
+                continue
+
+            # Check if this collection might be related
+            # Extract the target part after "target_"
+            col_target = col_name[7:]  # Remove "target_" prefix
+
+            # Similar if: substring match, or same network/domain
+            if (sanitized in col_target
+                    or col_target in sanitized
+                    or _targets_similar(sanitized, col_target)):
+                similar.append(col_name)
+
+    except Exception as e:
+        logger.debug("find_similar_targets_error", error=str(e))
+
+    return similar
+
+
+def _targets_similar(target1: str, target2: str) -> bool:
+    """
+    Check if two sanitized targets are similar enough to share memories.
+
+    For example:
+    - 10_10_10_1 and 10_10_10_2 (same network)
+    - example_com and www_example_com (same domain)
+    """
+    # Check for same IP network (first 3 octets)
+    parts1 = target1.split("_")
+    parts2 = target2.split("_")
+
+    # IP-like targets (4 parts, all numeric)
+    if len(parts1) == 4 and len(parts2) == 4:
+        try:
+            # Check if all parts are numeric
+            [int(p) for p in parts1]
+            [int(p) for p in parts2]
+            # Same network if first 3 octets match
+            if parts1[:3] == parts2[:3]:
+                return True
+        except ValueError:
+            pass
+
+    # Domain similarity - check if one contains the other
+    if len(target1) > 4 and len(target2) > 4:
+        # Remove common prefixes like www_
+        t1_clean = target1.replace("www_", "")
+        t2_clean = target2.replace("www_", "")
+        if t1_clean == t2_clean:
+            return True
+
+    return False
+
+
 def get_previous_memory(
     query: str,
     target: str | None = None,
     include_semantic: bool = True,
     include_episodic: bool = True,
     limit: int = 5,
-    threshold: float = 0.3,
+    threshold: float = 0.2,  # Lowered from 0.3 for better recall
 ) -> str:
     """
     Get previous memory for RAG (Retrieval Augmented Generation).
@@ -677,21 +767,25 @@ def get_previous_memory(
     semantic memory to augment the agent's prompt with historical
     knowledge.
 
+    Enhanced to search similar targets and always include semantic fallback.
+
     Args:
         query: Query describing what to retrieve.
         target: Optional target for episodic memory search.
         include_semantic: Include global semantic memory.
         include_episodic: Include target-specific episodic memory.
         limit: Maximum results per memory type.
-        threshold: Minimum similarity score.
+        threshold: Minimum similarity score (default 0.2 for good recall).
 
     Returns:
         Formatted string with relevant memories for prompt injection.
     """
     results = []
+    searched_locations = []
 
-    # Search semantic memory (global knowledge)
+    # Search semantic memory (global knowledge) - ALWAYS search this first
     if include_semantic:
+        searched_locations.append("semantic:_all_")
         semantic_results = search_semantic_memory(
             query=query,
             limit=limit,
@@ -703,29 +797,47 @@ def get_previous_memory(
             for i, doc in enumerate(semantic_results, 1):
                 score = doc.get("score", 0)
                 text = doc.get("text", "")
-                results.append(f"[{i}] (score: {score:.2f}) {text[:500]}")
+                source = doc.get("metadata", {}).get("source_target", "")
+                source_info = f" [from: {source}]" if source else ""
+                results.append(f"[{i}] (score: {score:.2f}){source_info} {text[:500]}")
             results.append("")
 
     # Search episodic memory (target-specific)
     if include_episodic and target:
-        episodic_results = search_episodic_memory(
-            target=target,
-            query=query,
-            limit=limit,
-            threshold=threshold,
-        )
+        # Find similar targets to expand search
+        similar_targets = find_similar_targets(target)
 
-        if episodic_results:
-            results.append(f"=== Target History (Episodic Memory: {target}) ===")
-            for i, doc in enumerate(episodic_results, 1):
-                score = doc.get("score", 0)
-                text = doc.get("text", "")
-                step = doc.get("metadata", {}).get("step", "?")
-                results.append(f"[{i}] (step {step}, score: {score:.2f}) {text[:500]}")
-            results.append("")
+        for collection_name in similar_targets:
+            searched_locations.append(f"episodic:{collection_name}")
+
+            # Extract target from collection name for search
+            search_target = collection_name[7:] if collection_name.startswith("target_") else target
+
+            episodic_results = search_episodic_memory(
+                target=search_target,
+                query=query,
+                limit=limit,
+                threshold=threshold,
+            )
+
+            if episodic_results:
+                results.append(f"=== Target History ({collection_name}) ===")
+                for i, doc in enumerate(episodic_results, 1):
+                    score = doc.get("score", 0)
+                    text = doc.get("text", "")
+                    step = doc.get("metadata", {}).get("step", "?")
+                    results.append(f"[{i}] (step {step}, score: {score:.2f}) {text[:500]}")
+                results.append("")
 
     if not results:
-        return "No relevant memories found."
+        # Provide informative message about what was searched
+        return (
+            f"No relevant memories found.\n"
+            f"Searched: {', '.join(searched_locations)}\n"
+            f"Query: {query[:100]}\n"
+            f"Threshold: {threshold}\n"
+            f"This is a fresh start for this target."
+        )
 
     return "\n".join(results)
 
@@ -789,33 +901,52 @@ def read_key_findings(
     target: str | None = None,
     query: str = "security findings vulnerabilities",
     limit: int = 10,
+    threshold: float = 0.2,  # Low threshold for better recall
 ) -> list[dict[str, Any]]:
     """
     Read key findings from memory.
 
-    If target is provided, reads from episodic memory.
+    If target is provided, reads from episodic memory (including similar targets).
     Otherwise, reads from semantic memory.
 
     Args:
         target: Optional target for episodic search.
         query: Search query.
         limit: Maximum results.
+        threshold: Similarity threshold (default 0.2 for good recall).
 
     Returns:
         List of finding documents.
     """
+    results = []
+
     if target:
-        return search_episodic_memory(
-            target=target,
-            query=query,
-            limit=limit,
-            threshold=0.3,
-        )
+        # Search similar targets too
+        similar_targets = find_similar_targets(target)
+        for collection_name in similar_targets:
+            search_target = collection_name[7:] if collection_name.startswith("target_") else target
+            episodic_results = search_episodic_memory(
+                target=search_target,
+                query=query,
+                limit=limit,
+                threshold=threshold,
+            )
+            results.extend(episodic_results)
+
+        # Deduplicate by text content
+        seen = set()
+        unique_results = []
+        for r in results:
+            text = r.get("text", "")
+            if text not in seen:
+                seen.add(text)
+                unique_results.append(r)
+        return unique_results[:limit]
     else:
         return search_semantic_memory(
             query=query,
             limit=limit,
-            threshold=0.3,
+            threshold=threshold,
         )
 
 
@@ -1030,8 +1161,8 @@ class MemoryTool(HybridTool):
                 },
                 "threshold": {
                     "type": "number",
-                    "description": "Minimum similarity threshold for search (0.0-1.0)",
-                    "default": 0.5,
+                    "description": "Minimum similarity threshold for search (0.0-1.0). Lower = more results but less relevant.",
+                    "default": 0.25,
                     "minimum": 0.0,
                     "maximum": 1.0,
                 },
@@ -1214,7 +1345,7 @@ class MemoryTool(HybridTool):
         memory_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         limit: int = 10,
-        threshold: float = 0.5,
+        threshold: float = 0.25,  # Lowered from 0.5 for better memory recall
         severity: str = "info",
         **kwargs: Any,
     ) -> ToolResult:
@@ -1369,7 +1500,14 @@ class MemoryTool(HybridTool):
         limit: int,
         threshold: float,
     ) -> ToolResult:
-        """Search memories by semantic similarity."""
+        """
+        Search memories by semantic similarity.
+
+        Enhanced to:
+        - Search similar/related targets (same network, different ports, etc.)
+        - Always search semantic memory as fallback when episodic returns nothing
+        - Provide informative messages about what was searched
+        """
         if not query:
             return ToolResult(
                 success=False,
@@ -1378,8 +1516,11 @@ class MemoryTool(HybridTool):
             )
 
         results = []
+        searched_locations = []
 
+        # Search semantic memory (global knowledge)
         if memory_scope in ("semantic", "both"):
+            searched_locations.append("semantic:_all_")
             semantic_results = search_semantic_memory(
                 query=query,
                 limit=limit,
@@ -1389,22 +1530,56 @@ class MemoryTool(HybridTool):
                 r["source"] = "semantic"
                 results.append(r)
 
+        # Search episodic memory (target-specific and similar targets)
         if memory_scope in ("episodic", "both") and target:
-            episodic_results = search_episodic_memory(
-                target=target,
+            # Find similar targets to expand search
+            similar_targets = find_similar_targets(target)
+
+            for collection_name in similar_targets:
+                searched_locations.append(f"episodic:{collection_name}")
+                # Extract target from collection name
+                search_target = collection_name[7:] if collection_name.startswith("target_") else target
+
+                episodic_results = search_episodic_memory(
+                    target=search_target,
+                    query=query,
+                    limit=limit,
+                    threshold=threshold,
+                )
+                for r in episodic_results:
+                    r["source"] = f"episodic:{collection_name}"
+                    results.append(r)
+
+        # FALLBACK: If episodic-only search found nothing, also search semantic
+        if memory_scope == "episodic" and not results:
+            searched_locations.append("semantic:_all_ (fallback)")
+            semantic_results = search_semantic_memory(
                 query=query,
                 limit=limit,
                 threshold=threshold,
             )
-            for r in episodic_results:
-                r["source"] = "episodic"
+            for r in semantic_results:
+                r["source"] = "semantic (fallback)"
                 results.append(r)
 
         if not results:
+            # Provide informative message about what was searched
+            target_info = f" for target '{target}'" if target else ""
             return ToolResult(
                 success=True,
-                output=f"No memories found matching '{query}' with threshold {threshold}",
-                metadata={"count": 0, "query": query},
+                output=(
+                    f"No memories found{target_info}.\n"
+                    f"Searched: {', '.join(searched_locations)}\n"
+                    f"Query: '{query[:80]}...'\n"
+                    f"Threshold: {threshold}\n"
+                    f"This appears to be a fresh target with no prior findings."
+                ),
+                metadata={
+                    "count": 0,
+                    "query": query,
+                    "searched_locations": searched_locations,
+                    "target": target,
+                },
             )
 
         # Sort by score descending
@@ -1413,6 +1588,7 @@ class MemoryTool(HybridTool):
 
         # Format results
         output_parts = [f"Found {len(results)} relevant memories:\n"]
+        output_parts.append(f"Searched: {', '.join(searched_locations)}\n")
 
         for i, result in enumerate(results, 1):
             text = result.get("text", "")
@@ -1428,15 +1604,19 @@ class MemoryTool(HybridTool):
 
             # Show key metadata
             if mem_metadata:
-                key_fields = ["type", "severity", "endpoint", "technique"]
-                meta_parts = [f"{k}={v}" for k, v in mem_metadata.items() if k in key_fields]
+                key_fields = ["type", "severity", "endpoint", "technique", "source_target"]
+                meta_parts = [f"{k}={v}" for k, v in mem_metadata.items() if k in key_fields and v]
                 if meta_parts:
                     output_parts.append(f"    [{', '.join(meta_parts)}]")
 
         return ToolResult(
             success=True,
             output="\n".join(output_parts),
-            metadata={"count": len(results), "query": query},
+            metadata={
+                "count": len(results),
+                "query": query,
+                "searched_locations": searched_locations,
+            },
         )
 
     async def _recall(self, memory_id: str | None) -> ToolResult:

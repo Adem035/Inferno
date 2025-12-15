@@ -1579,35 +1579,47 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
         if config.model:
             options.model = config.model
 
-        # Auto-enable extended thinking for Opus models
-        thinking_enabled = False
+        # Extended thinking - ENABLED BY DEFAULT for all modes
+        # Critical for complex security reasoning (SQLi technique selection, bypass strategies, etc.)
+        thinking_enabled = True
         thinking_only_output = False
+        thinking_budget = 64000  # High budget for complex security analysis
+
+        # Override with settings if available
+        if self._settings:
+            thinking_enabled = self._settings.execution.thinking_enabled
+            thinking_only_output = self._settings.execution.thinking_only_output
+            thinking_budget = self._settings.execution.thinking_budget
+
+        # Higher budget for Opus models (they use thinking more effectively)
         model_name = (config.model or "").lower()
         is_opus = "opus" in model_name
-
         if is_opus:
-            thinking_enabled = True
-            thinking_only_output = True  # Show only reasoning for Opus
-            # Use configured budget or default 32k for Opus
-            thinking_budget = 32000
-            if self._settings and self._settings.execution.thinking_budget:
-                thinking_budget = self._settings.execution.thinking_budget
+            thinking_budget = max(thinking_budget, 64000)
+
+        if thinking_enabled:
             options.max_thinking_tokens = thinking_budget
             logger.info(
-                "extended_thinking_auto_enabled",
+                "extended_thinking_enabled",
                 model=config.model,
                 budget=thinking_budget,
                 thinking_only=thinking_only_output,
+                mode=config.mode,
             )
-        elif self._settings and self._settings.execution.thinking_enabled:
-            # Manual override for non-Opus models if explicitly configured
-            thinking_enabled = True
-            thinking_only_output = self._settings.execution.thinking_only_output
-            options.max_thinking_tokens = self._settings.execution.thinking_budget
+
+        # Parallel tool execution - enabled by default
+        # When Claude requests multiple tools in one turn, MCP can execute them concurrently
+        parallel_tools = True
+        max_parallel = 5
+        if self._settings:
+            parallel_tools = self._settings.execution.parallel_tools
+            max_parallel = self._settings.execution.max_parallel_tools
+
+        if parallel_tools:
             logger.info(
-                "extended_thinking_manual_enabled",
-                budget=self._settings.execution.thinking_budget,
-                thinking_only=thinking_only_output,
+                "parallel_tools_enabled",
+                max_concurrent=max_parallel,
+                mode=config.mode,
             )
 
         turns = 0

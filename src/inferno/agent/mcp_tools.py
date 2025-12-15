@@ -221,15 +221,15 @@ async def memory_store(args: dict[str, Any]) -> dict[str, Any]:
         "query": str,
         "memory_type": str,  # "findings", "context", "knowledge", "checkpoint" or empty for all
         "limit": int,  # max results (default 10)
-        "threshold": float,  # similarity threshold 0.0-1.0 (default 0.7)
+        "threshold": float,  # similarity threshold 0.0-1.0 (default 0.25 for good recall)
     }
 )
 async def memory_search(args: dict[str, Any]) -> dict[str, Any]:
-    """Search Mem0/Qdrant semantic memory."""
+    """Search Mem0/Qdrant semantic memory with similarity matching."""
     mem_tool = _get_memory_tool()
 
-    # Default to 0.5 threshold (0.7 was too strict)
-    threshold = args.get("threshold", 0.5)
+    # Default to 0.25 threshold for better recall of similar memories
+    threshold = args.get("threshold", 0.25)
 
     result = await mem_tool.execute(
         operation="search",

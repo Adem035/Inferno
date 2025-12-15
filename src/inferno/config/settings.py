@@ -301,19 +301,33 @@ class ExecutionConfig(BaseModel):
     )
 
     # Extended Thinking Configuration
+    # ENABLED BY DEFAULT - Critical for complex security reasoning
     thinking_enabled: bool = Field(
-        default=False,
-        description="Enable extended thinking mode (shows reasoning, suppresses normal output)",
+        default=True,
+        description="Enable extended thinking mode for deeper reasoning on complex security tasks",
     )
     thinking_budget: int = Field(
-        default=32000,
+        default=64000,
         ge=1024,
         le=100000,
-        description="Maximum tokens for thinking budget (min 1024, recommended 16k-32k for complex tasks)",
+        description="Maximum tokens for thinking budget (64k default for complex security analysis)",
     )
     thinking_only_output: bool = Field(
+        default=False,
+        description="When True, only show thinking blocks. When False, show both thinking and output.",
+    )
+
+    # Parallel Tool Execution Configuration
+    # When Claude calls multiple tools in one turn, they can be executed concurrently
+    parallel_tools: bool = Field(
         default=True,
-        description="When thinking is enabled, only show thinking blocks (suppress regular text output)",
+        description="Enable parallel tool execution when Claude requests multiple tools in one turn",
+    )
+    max_parallel_tools: int = Field(
+        default=5,
+        ge=1,
+        le=10,
+        description="Maximum number of tools to execute in parallel per turn",
     )
 
     # Response handling

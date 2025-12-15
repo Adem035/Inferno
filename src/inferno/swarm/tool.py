@@ -360,6 +360,10 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
             import tempfile
             subagent_cwd = tempfile.mkdtemp(prefix=f"inferno_subagent_{agent_type}_")
 
+            # Extended thinking for subagents - enables deeper reasoning
+            # Use 32k budget for subagents (less than main agent but still substantial)
+            thinking_budget = 32000
+
             options = ClaudeAgentOptions(
                 max_turns=config.max_turns,
                 system_prompt=system_prompt,
@@ -368,8 +372,9 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
                 mcp_servers={"inferno-subagent": subagent_mcp},
                 can_use_tool=auto_approve_tools,
                 model=self._model,
+                max_thinking_tokens=thinking_budget,  # Enable extended thinking
             )
-            console.print(f"[magenta]│[/magenta] [dim]Working dir: {subagent_cwd}[/dim]")
+            console.print(f"[magenta]│[/magenta] [dim]Working dir: {subagent_cwd} | Thinking: {thinking_budget} tokens[/dim]")
 
             # Track metrics
             turns = 0
