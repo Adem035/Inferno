@@ -1623,6 +1623,7 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
             )
 
         turns = 0
+        internal_turn_count = 0  # Fallback counter - increments on each AssistantMessage
         total_cost = 0.0
         total_tokens = 0
         final_message = None
@@ -1638,7 +1639,7 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
 
         async def process_response_stream(client: ClaudeSDKClient) -> tuple[str, bool, str | None]:
             """Process the response stream and return (stop_reason, objective_met, error)."""
-            nonlocal turns, total_cost, total_tokens, final_message, findings_summary, pending_tools, flags_found
+            nonlocal turns, internal_turn_count, total_cost, total_tokens, final_message, findings_summary, pending_tools, flags_found
 
             local_stop_reason = "unknown"
             local_objective_met = False
@@ -1655,6 +1656,9 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                         )
 
                 elif isinstance(message, AssistantMessage):
+                    # Track turns internally as fallback
+                    internal_turn_count += 1
+
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             final_message = block.text
@@ -1662,7 +1666,7 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                             # Guardrails: check output for security violations
                             guardrail_result = self._check_guardrails_output(
                                 block.text,
-                                context={"source": "assistant_message", "turn": turns}
+                                context={"source": "assistant_message", "turn": internal_turn_count}
                             )
                             if guardrail_result and guardrail_result.action_taken == GuardrailAction.BLOCK:
                                 logger.error(
@@ -2004,8 +2008,17 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                                     self._on_tool_result(tool_name, output, is_error)
 
                 elif isinstance(message, ResultMessage):
-                    turns = message.num_turns
+                    # Use SDK's turn count, but fallback to internal counter if 0
+                    turns = message.num_turns if message.num_turns > 0 else internal_turn_count
                     total_cost = message.total_cost_usd
+
+                    # Log if we had to use fallback
+                    if message.num_turns == 0 and internal_turn_count > 0:
+                        logger.warning(
+                            "using_fallback_turn_count",
+                            sdk_turns=message.num_turns,
+                            internal_turns=internal_turn_count,
+                        )
 
                     # Track turns without findings
                     self._turns_without_findings = turns - self._last_finding_turn
@@ -2045,15 +2058,24 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                         local_error = str(message.result)
                     else:
                         # Check if objective was met based on result
+                        # STRICT matching - avoid false positives from casual mentions
                         result_text = str(message.result).lower()
-                        local_objective_met = (
-                            "objective met" in result_text or
-                            "assessment complete" in result_text or
-                            "completed successfully" in result_text or
-                            "flag" in result_text or
-                            "all vulnerabilities" in result_text or
-                            len(flags_found) > 0  # CTF mode: finding flag = objective met
+
+                        # Only count as objective met if:
+                        # 1. CTF mode and actual flags captured (high confidence)
+                        # 2. Explicit objective completion markers (exact phrases)
+                        ctf_objective_met = len(flags_found) > 0
+
+                        # Require explicit, unambiguous completion statements
+                        explicit_completion = (
+                            "objective has been met" in result_text or
+                            "objective successfully met" in result_text or
+                            "successfully completed the objective" in result_text or
+                            "all objectives achieved" in result_text or
+                            "[objective_met]" in result_text  # Explicit marker
                         )
+
+                        local_objective_met = ctf_objective_met or explicit_completion
                         findings_summary = message.result
 
                     logger.info(
@@ -2075,6 +2097,31 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
 
                 # Process initial response
                 stop_reason, objective_met, error = await process_response_stream(client)
+
+                # Log why we're stopping or continuing
+                if stop_reason != "max_turns":
+                    logger.info(
+                        "assessment_stopping",
+                        reason="stop_reason_not_max_turns",
+                        stop_reason=stop_reason,
+                        objective_met=objective_met,
+                        internal_turns=internal_turn_count,
+                        auto_continue_enabled=config.auto_continue,
+                    )
+                elif objective_met:
+                    logger.info(
+                        "assessment_stopping",
+                        reason="objective_met",
+                        stop_reason=stop_reason,
+                        internal_turns=internal_turn_count,
+                    )
+                elif error:
+                    logger.info(
+                        "assessment_stopping",
+                        reason="error_occurred",
+                        error=error,
+                        internal_turns=internal_turn_count,
+                    )
 
                 # Auto-continue loop: if we hit max_turns but objective not met, continue
                 while (
@@ -2175,7 +2222,17 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                 "assessment_failed",
                 operation_id=operation_id,
                 error=error,
+                internal_turns=internal_turn_count,
             )
+
+        # Final fallback: if turns is still 0 but we tracked internal turns, use those
+        if turns == 0 and internal_turn_count > 0:
+            logger.warning(
+                "no_result_message_received",
+                using_internal_turns=internal_turn_count,
+                stop_reason=stop_reason,
+            )
+            turns = internal_turn_count
 
         ended_at = datetime.now(UTC)
         duration = (ended_at - started_at).total_seconds()
