@@ -107,9 +107,19 @@ except ImportError:
 # - DiminishingReturnsTracker, FlagDetector, CTFPayloadBlaster
 # - ChainEnumerator, ValidationOrchestrator
 # - ApplicationModel, ParameterRoleAnalyzer (integrated into StrategicPlanner)
-# - VulnerabilityScorer, MLScoringEngine, QualityGatePipeline
+# - MLScoringEngine, QualityGatePipeline
 
-VULNERABILITY_SCORER_AVAILABLE = False
+# Assessment Scoring - Performance Assessment Framework from paper
+try:
+    from inferno.core.assessment_scoring import (
+        AssessmentScorer,
+        generate_scoring_report,
+        format_scoring_report_text,
+    )
+    ASSESSMENT_SCORING_AVAILABLE = True
+except ImportError:
+    ASSESSMENT_SCORING_AVAILABLE = False
+
 ML_SCORING_AVAILABLE = False
 QUALITY_GATES_AVAILABLE = False
 
@@ -152,6 +162,8 @@ class ExecutionResult:
     flags_found: list[str] = field(default_factory=list)  # CTF mode
     trace_json_path: str | None = None  # Path to session trace JSON
     trace_html_path: str | None = None  # Path to session trace HTML
+    # Assessment Scoring (Performance Assessment Framework)
+    assessment_score: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -174,6 +186,7 @@ class ExecutionResult:
             "flags_found": self.flags_found,
             "trace_json_path": self.trace_json_path,
             "trace_html_path": self.trace_html_path,
+            "assessment_score": self.assessment_score,
         }
 
 
@@ -312,7 +325,7 @@ class SDKAgentExecutor:
         # These checks are still in the codebase but will be no-ops
         self._chain_enumerator = None
         self._validation_orchestrator = None
-        self._vulnerability_scorer = None
+        self._assessment_scorer: AssessmentScorer | None = None  # Initialized per-run
         self._ml_engine = None
         self._diminishing_tracker = None
         self._flag_detector = None
@@ -1373,6 +1386,13 @@ The system automatically monitors progress and can suggest when to try different
         self._pending_validations = []
         self._validated_findings = []
 
+        # Initialize Assessment Scorer for this run
+        if ASSESSMENT_SCORING_AVAILABLE:
+            self._assessment_scorer = AssessmentScorer(operation_id, config.target)
+            logger.info("assessment_scorer_initialized", target=config.target)
+        else:
+            self._assessment_scorer = None
+
         # Reset attack intelligence state
         self._detected_technologies = set()
         self._detected_hints = []
@@ -1865,21 +1885,33 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                                             except Exception:
                                                 pass
 
-                                        # Score finding using AI-powered vulnerability scorer
-                                        if self._vulnerability_scorer:
+                                        # Score finding using Assessment Scoring framework
+                                        if self._assessment_scorer:
                                             try:
-                                                score_result = self._vulnerability_scorer.score_finding(finding_data)
-                                                finding_data["ai_score"] = score_result.get("score", 0)
-                                                finding_data["ai_confidence"] = score_result.get("confidence", 0)
-                                                finding_data["false_positive_likelihood"] = score_result.get("false_positive_likelihood", 0)
+                                                # Determine if exploited (vs just verified)
+                                                is_exploited = any(kw in content.lower() for kw in [
+                                                    "exploited", "extracted", "dumped", "rce", "shell",
+                                                    "data exfiltration", "account takeover", "admin access"
+                                                ])
+                                                vuln_score = self._assessment_scorer.add_finding(
+                                                    vuln_type=vuln_type or "unknown",
+                                                    severity=severity or "medium",
+                                                    exploited=is_exploited,
+                                                    confidence=80,
+                                                )
+                                                finding_data["assessment_score"] = vuln_score.total_score
+                                                finding_data["technical_complexity"] = vuln_score.technical_complexity.score
+                                                finding_data["business_impact"] = vuln_score.business_impact_weight
                                                 logger.info(
                                                     "finding_scored",
-                                                    score=finding_data["ai_score"],
-                                                    confidence=finding_data["ai_confidence"],
-                                                    fp_likelihood=finding_data["false_positive_likelihood"],
+                                                    total_score=vuln_score.total_score,
+                                                    tc_score=vuln_score.technical_complexity.score,
+                                                    business_impact=vuln_score.business_impact_weight,
+                                                    exploited=is_exploited,
+                                                    assessment_total=self._assessment_scorer.current_score.total_score,
                                                 )
                                             except Exception as e:
-                                                logger.debug("finding_scoring_failed", error=str(e))
+                                                logger.debug("assessment_scoring_failed", error=str(e))
 
                                         # Enhanced ML classification for vulnerability type verification
                                         if self._ml_engine:
@@ -2263,6 +2295,25 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
             flag_stats = self._flag_detector.get_statistics()
             logger.info("ctf_flag_detection_stats", **flag_stats)
 
+        # Finalize Assessment Scoring
+        assessment_score_data = None
+        if self._assessment_scorer:
+            try:
+                final_score = self._assessment_scorer.complete_assessment()
+                assessment_score_data = final_score.to_dict()
+                logger.info(
+                    "assessment_scoring_complete",
+                    total_score=final_score.total_score,
+                    finding_count=final_score.finding_count,
+                    exploited_count=final_score.exploited_count,
+                    exploitation_rate=final_score.exploitation_rate,
+                )
+                # Log human-readable summary
+                score_summary = self._assessment_scorer.get_summary()
+                logger.info("assessment_score_summary", summary=score_summary[:500])
+            except Exception as e:
+                logger.warning("assessment_scoring_finalize_failed", error=str(e))
+
         result = ExecutionResult(
             operation_id=operation_id,
             objective_met=objective_met,
@@ -2280,6 +2331,7 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
             final_message=final_message,
             continuations=continuation_count,
             flags_found=list(set(flags_found)),  # Deduplicate
+            assessment_score=assessment_score_data,
         )
 
         if self._on_complete:

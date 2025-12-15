@@ -2,17 +2,12 @@
 System prompt builder for Inferno.
 
 This module provides the system prompt construction for the
-pentesting agent with dynamic context injection.
+pentesting agent using the dynamic prompt generation system.
 
-It integrates with the new engine-based prompt system that
-dynamically assembles prompts from modular markdown templates.
-
-Architecture:
-- templates/: Core identity and report templates
-- behaviors/: Composable behavior modules (exploitation, CVE-driven, etc.)
-- phases/: Phase-specific guidance (recon, enumeration, exploitation)
-- contexts/: Target-type specific guidance (web, API, network, CTF)
-- tools/: Tool usage protocols
+Architecture (Dec 2025):
+- Uses DynamicPromptGenerator for task-specific prompts
+- NO static templates - everything generated based on context
+- Integrates with MITRE ATT&CK for technique mapping
 """
 
 from __future__ import annotations
@@ -22,13 +17,12 @@ from typing import TYPE_CHECKING, Any
 
 from inferno.prompts import (
     AgentPersona,
-    detect_context_type,
-)
-from inferno.prompts import (
-    build_system_prompt as engine_build_system_prompt,
-)
-from inferno.prompts import (
-    get_checkpoint_prompt as engine_get_checkpoint_prompt,
+    DynamicPromptGenerator,
+    TaskContext,
+    TaskType,
+    TechStack,
+    generate_prompt,
+    get_generator,
 )
 
 if TYPE_CHECKING:
@@ -53,20 +47,80 @@ class ObjectiveInfo:
     success_criteria: list[str] = field(default_factory=list)
 
 
+def detect_context_type(target: str, objective: str) -> str:
+    """
+    Detect the context type from target and objective.
+
+    Args:
+        target: Target URL or IP
+        objective: Assessment objective
+
+    Returns:
+        Context type string (web, api, ctf, network, etc.)
+    """
+    target_lower = target.lower()
+    objective_lower = objective.lower()
+
+    # CTF detection
+    if any(word in objective_lower for word in ["flag", "ctf", "capture", "hackthebox", "htb"]):
+        return "ctf"
+
+    # API detection
+    if any(word in target_lower for word in ["/api/", "/v1/", "/v2/", "/graphql"]):
+        return "api"
+    if "api" in objective_lower:
+        return "api"
+
+    # Network detection
+    if not target_lower.startswith(("http://", "https://")):
+        if any(c.isdigit() for c in target):  # Likely an IP
+            return "network"
+
+    # Default to web
+    return "web"
+
+
+def detect_tech_stack(target: str) -> list[TechStack]:
+    """
+    Detect technology stack from target URL.
+
+    This is a basic heuristic - the actual tech stack is
+    discovered during reconnaissance.
+    """
+    target_lower = target.lower()
+    techs = []
+
+    # Framework hints from URL
+    if "wordpress" in target_lower or "/wp-" in target_lower:
+        techs.append(TechStack.WORDPRESS)
+    if "drupal" in target_lower:
+        techs.append(TechStack.DRUPAL)
+    if "/api/" in target_lower or "/v1/" in target_lower:
+        techs.append(TechStack.API)
+    if "/graphql" in target_lower:
+        techs.append(TechStack.GRAPHQL)
+
+    # File extension hints
+    if ".php" in target_lower:
+        techs.append(TechStack.PHP)
+    if ".aspx" in target_lower or ".asp" in target_lower:
+        techs.append(TechStack.ASPNET)
+    if ".jsp" in target_lower:
+        techs.append(TechStack.JAVA)
+
+    if not techs:
+        techs.append(TechStack.GENERIC_WEB)
+
+    return techs
+
+
 class SystemPromptBuilder:
     """
     Builds dynamic system prompts for the Inferno agent.
 
-    This builder uses the new engine-based prompt system that
-    dynamically assembles prompts from modular markdown templates.
-
-    The prompt is constructed from:
-    - Core identity and ethical guidelines (templates/system.md)
-    - Behavioral modules (behaviors/*.md)
-    - Phase-specific guidance (phases/*.md)
-    - Context-specific guidance (contexts/*.md)
-    - Tool usage protocols (tools/tool_guide.md)
-    - Dynamic operation context (IDs, directories, budget)
+    This builder uses the DynamicPromptGenerator that creates
+    task-specific prompts based on context, tech stack, and
+    MITRE ATT&CK technique mapping.
     """
 
     def __init__(self, persona: AgentPersona = AgentPersona.THOROUGH) -> None:
@@ -83,6 +137,7 @@ class SystemPromptBuilder:
         self._available_tools: list[str] = []
         self._custom_rules: list[str] = []
         self._budget_info: dict[str, Any] = {}
+        self._generator = get_generator()
 
     @property
     def persona(self) -> AgentPersona:
@@ -90,15 +145,7 @@ class SystemPromptBuilder:
         return self._persona
 
     def set_persona(self, persona: AgentPersona) -> SystemPromptBuilder:
-        """
-        Set the agent persona.
-
-        Args:
-            persona: The persona to use.
-
-        Returns:
-            Self for chaining.
-        """
+        """Set the agent persona."""
         self._persona = persona
         return self
 
@@ -177,7 +224,7 @@ class SystemPromptBuilder:
 
     def build(self) -> str:
         """
-        Build the complete system prompt using the new engine.
+        Build the complete system prompt using DynamicPromptGenerator.
 
         Returns:
             The constructed system prompt string.
@@ -187,38 +234,36 @@ class SystemPromptBuilder:
         objective = self._objective.objective if self._objective else "General security assessment"
         scope = self._target_info.scope if self._target_info else "as provided"
 
-        # Format rules
-        rules = "\n".join(f"- {r}" for r in self._custom_rules) if self._custom_rules else "Standard penetration testing rules apply"
-
-        # Get operation info
-        operation_id = self._operation_context.operation_id if self._operation_context else ""
-        current_step = self._budget_info.get("current_turns", 0)
-        max_steps = self._budget_info.get("max_turns", 100)
-
-        # Detect context type from target
+        # Detect context and tech stack
         context_type = detect_context_type(target, objective)
+        tech_stack = detect_tech_stack(target)
 
-        # Map persona to context type override
+        # Override for CTF persona
         if self._persona == AgentPersona.CTF:
             context_type = "ctf"
 
-        # Build base prompt from engine
-        base_prompt = engine_build_system_prompt(
+        # Build custom instructions from rules
+        custom_instructions = ""
+        if self._custom_rules:
+            custom_instructions = "\n".join(f"- {r}" for r in self._custom_rules)
+
+        # Create task context for initial reconnaissance
+        task_context = TaskContext(
+            task_type=TaskType.RECON,  # Start with recon
             target=target,
-            objective=objective,
             scope=scope,
-            rules=rules,
-            operation_id=operation_id,
-            current_step=current_step,
-            max_steps=max_steps,
-            context_type=context_type,
+            objective=objective,
+            tech_stack=tech_stack,
+            custom_instructions=custom_instructions,
         )
+
+        # Generate base prompt
+        base_prompt = self._generator.generate(task_context)
 
         # Add dynamic sections
         sections = [base_prompt]
 
-        # AUTO-INJECT: Environment context (OS, IPs, tools, wordlists)
-        # This is a CAI-inspired feature for better situational awareness
+        # Environment context (auto-detected tools, IPs, wordlists)
         env_section = self._build_environment_section()
         if env_section:
             sections.append(env_section)
@@ -231,15 +276,7 @@ class SystemPromptBuilder:
         if self._budget_info:
             sections.append(self._build_budget_section())
 
-        # Available tools (if explicitly provided)
-        if self._available_tools:
-            sections.append(self._build_tools_section())
-
-        # Success criteria
-        if self._objective and self._objective.success_criteria:
-            sections.append(self._build_criteria_section())
-
-        # Swarm worker instructions - encourage parallel work
+        # Swarm worker instructions
         sections.append(self._build_swarm_section())
 
         return "\n\n".join(sections)
@@ -254,293 +291,83 @@ class SystemPromptBuilder:
 - **Started**: {ctx.start_time.isoformat()}
 - **Artifacts Directory**: {ctx.artifacts_dir}
 
-**IMPORTANT**: Save ALL files (scripts, cookies, outputs) to the artifacts directory `{ctx.artifacts_dir}` instead of /tmp. This ensures persistence and cleanup."""
-
-        # Check for previous artifacts from the same target
-        previous_artifacts = self._find_previous_artifacts(ctx.artifacts_dir)
-        if previous_artifacts:
-            section += f"""
-
-### Previous Operation Artifacts
-Previous operations on this target have artifacts you can reuse:
-{previous_artifacts}
-
-**IMPORTANT**: Check and reuse these artifacts instead of re-running tools. Use `cat` or `Read` to view files."""
+**IMPORTANT**: Save ALL files to `{ctx.artifacts_dir}` for persistence."""
 
         return section
-
-    def _find_previous_artifacts(self, current_artifacts_dir: str) -> str:
-        """Find artifacts from previous operations on the same target."""
-        from pathlib import Path
-
-        current_path = Path(current_artifacts_dir)
-        target_dir = current_path.parent  # e.g., outputs/http_10.10.11.97/
-
-        if not target_dir.exists():
-            return ""
-
-        artifacts_info = []
-        current_op_id = current_path.name
-
-        # Find previous operation directories
-        for op_dir in sorted(target_dir.iterdir()):
-            if not op_dir.is_dir() or op_dir.name == current_op_id:
-                continue
-
-            # Look for interesting files
-            interesting_files = []
-            for pattern in ["*.txt", "*.php", "*.py", "*.json", "*.xml", "*.yaml", "*.yml"]:
-                interesting_files.extend(op_dir.rglob(pattern))
-
-            # Check for specific valuable directories
-            git_repo = op_dir / "outputs" / "git_repo"
-            source_dir = op_dir / "outputs" / "source"
-
-            if git_repo.exists():
-                files = list(git_repo.glob("*.php"))
-                if files:
-                    artifacts_info.append(f"- **{op_dir.name}**: Git dump at `{git_repo}` ({len(files)} PHP files)")
-            elif source_dir.exists():
-                files = list(source_dir.rglob("*.php"))
-                if files:
-                    artifacts_info.append(f"- **{op_dir.name}**: Source code at `{source_dir}` ({len(files)} files)")
-            elif interesting_files:
-                artifacts_info.append(f"- **{op_dir.name}**: {len(interesting_files)} files at `{op_dir}`")
-
-        return "\n".join(artifacts_info[:5]) if artifacts_info else ""  # Limit to 5 most recent
 
     def _build_budget_section(self) -> str:
         """Build budget information section."""
         info = self._budget_info
         return f"""## Resource Budget
 
-- **Max Turns**: {info['max_turns']}
-- **Max Tokens**: {info['max_tokens']}
-- **Current Usage**: {info['current_turns']} turns, {info['current_tokens']} tokens
+- **Turns**: {info['current_turns']}/{info['max_turns']}
 - **Budget Remaining**: {info['budget_percent']}%
 
 Create checkpoints at 20%, 40%, 60%, and 80% budget usage."""
-
-    def _build_tools_section(self) -> str:
-        """Build available tools section."""
-        tool_list = "\n".join(f"- {tool}" for tool in self._available_tools)
-        return f"""## Available Security Tools
-
-The following tools are installed and available:
-{tool_list}
-
-### Core Tools (Always Available)
-- **shell**: Execute shell commands
-- **http_request**: Make HTTP/HTTPS requests with full control
-- **memory**: Store and retrieve findings
-- **editor**: Create and edit files in artifacts directory
-- **stop**: Signal assessment completion
-
-### Security Scanner Wrappers (Use Tool Search)
-- **nmap_scan**: Network scanning with structured output
-- **gobuster**: Directory/subdomain enumeration with wordlist auto-resolution
-- **sqlmap**: SQL injection detection and exploitation
-- **nikto**: Web server vulnerability scanning
-- **nuclei**: Template-based vulnerability scanning
-- **hydra**: Network login brute-forcing (SSH, FTP, HTTP, SMB, MySQL, RDP)
-- **git_dumper**: Dump exposed .git repositories
-
-### Advanced Detection Tools (Use Tool Search)
-- **response_analyzer**: Analyze HTTP responses for vulnerabilities
-- **idor_scanner**: Detect insecure direct object references
-- **parameter_miner**: Discover hidden parameters
-- **endpoint_discovery**: Find hidden APIs and endpoints
-- **ssrf_detector**: Detect SSRF vulnerabilities with OOB callbacks
-- **graphql_tester**: Test GraphQL endpoints for security issues
-- **cache_poison**: Detect web cache poisoning vulnerabilities
-- **race_condition**: Test for race conditions with parallel requests
-
-### Validation & Reporting Tools
-- **validation_engine**: Validate and verify findings
-- **poc_generator**: Generate proof-of-concept code
-- **false_positive_filter**: Filter out false positives
-- **severity_calibrator**: Calibrate vulnerability severity
-- **report_writer**: Generate assessment reports
-
-### Proxy & WAF Tools
-- **proxy**: HTTP/HTTPS intercepting proxy (mitmproxy) - start/stop/capture/replay
-- **waf_detect**: Detect and fingerprint WAF, suggest bypass techniques
-
-### Wordlist Management
-Wordlists auto-resolve from SecLists. Use presets:
-- `common`, `big`, `raft-medium-directories` for web content
-- `subdomains-top1million` for subdomain enumeration
-- `passwords-common`, `rockyou-top10000` for credential attacks
-
-Use Tool Search to discover additional specialized tools as needed."""
-
-    def _build_criteria_section(self) -> str:
-        """Build success criteria section."""
-        criteria = "\n".join(f"- {c}" for c in self._objective.success_criteria)
-        return f"""## Success Criteria
-
-{criteria}"""
 
     def _build_swarm_section(self) -> str:
         """Build swarm worker instructions section."""
         return """## SWARM WORKERS - Parallelize Your Work!
 
-You have access to the `swarm` tool to spawn specialized workers. **USE IT FREQUENTLY** for:
+Use the `swarm` tool to spawn specialized workers:
 
-**When to spawn workers:**
-- After initial recon → spawn `scanner` for parallel vulnerability scanning
-- When you find potential vulnerabilities → spawn `analyzer` for deep investigation
-- When stuck or blocked → spawn `exploiter` with specific bypass instructions
-- To confirm findings → spawn `validator` for independent verification
-- When WAF blocks you → spawn `waf_bypass` specialist
-
-**Available worker types:**
 | Type | Use For |
 |------|---------|
-| `reconnaissance` | Fast enumeration, tech stack discovery |
+| `reconnaissance` | Fast enumeration, tech discovery |
 | `scanner` | Automated vulnerability scanning |
 | `exploiter` | Deep exploitation of specific vulns |
-| `analyzer` | Detailed analysis (SSTI, SQLi, XSS, etc.) |
 | `validator` | Independent finding confirmation |
-| `waf_bypass` | WAF/filter evasion techniques |
-| `business_logic` | Logic flaw hunting, race conditions |
-| `token_forgery` | JWT/session token attacks |
+| `waf_bypass` | WAF/filter evasion |
 
-**Example usage:**
+**Example:**
 ```
-# After finding potential SSTI
-swarm(agent_type="analyzer", task="Analyze SSTI in /render endpoint. Test Jinja2, Twig, Freemarker. If blocked, try encoding.")
-
-# When SQLi found but need exploitation
-swarm(agent_type="exploiter", task="Exploit SQL injection in /api/search?q=. Extract database contents.")
-
-# For parallel scanning
-swarm(agent_type="scanner", task="Scan /api/* endpoints for authentication bypass and IDOR.")
+swarm(agent_type="exploiter", task="Exploit SQLi in /search?q= to extract data")
 ```
 
-**IMPORTANT:** Don't try to do everything sequentially! Spawn workers for parallel efficiency."""
+Don't try to do everything sequentially - spawn workers for parallel efficiency!"""
 
     def _build_environment_section(self) -> str:
-        """
-        Build environment context section (CAI-inspired).
-
-        Auto-detects:
-        - Operating system and hostname
-        - IP addresses (including VPN tunnel)
-        - Available security tools
-        - Wordlist locations
-
-        This gives the agent situational awareness without manual configuration.
-        """
+        """Build environment context section."""
         import os
         import platform
         import shutil
-        import subprocess
 
         sections = []
 
-        # OS and hostname
-        os_info = f"{platform.system()} {platform.release()}"
-        hostname = platform.node()
-        sections.append(f"- **OS**: {os_info}")
-        sections.append(f"- **Hostname**: {hostname}")
-
-        # IP addresses
-        try:
-            # Get all IP addresses
-            result = subprocess.run(
-                ["hostname", "-I"] if platform.system() == "Linux" else ["ipconfig", "getifaddr", "en0"],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                ips = result.stdout.strip().split()[:3]  # Limit to 3 IPs
-                sections.append(f"- **Local IPs**: {', '.join(ips)}")
-        except Exception:
-            pass
-
-        # VPN tunnel (tun0) - critical for HTB/CTF
-        try:
-            result = subprocess.run(
-                ["ip", "addr", "show", "tun0"],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
-                    if "inet " in line:
-                        vpn_ip = line.strip().split()[1].split("/")[0]
-                        sections.append(f"- **VPN IP (tun0)**: {vpn_ip} ← Use this for reverse shells")
-                        break
-        except Exception:
-            pass
+        # OS info
+        sections.append(f"- **OS**: {platform.system()} {platform.release()}")
+        sections.append(f"- **Hostname**: {platform.node()}")
 
         # Available security tools
-        tools_available = []
         tools_to_check = [
-            ("nmap", "Network scanning"),
-            ("gobuster", "Directory enumeration"),
-            ("ffuf", "Fast fuzzing"),
-            ("sqlmap", "SQL injection"),
-            ("nuclei", "Vulnerability scanning"),
-            ("nikto", "Web server scanning"),
-            ("hydra", "Password cracking"),
-            ("hashcat", "Hash cracking"),
-            ("john", "John the Ripper"),
-            ("msfconsole", "Metasploit"),
-            ("burpsuite", "Burp Suite"),
-            ("wpscan", "WordPress scanning"),
-            ("dirsearch", "Directory search"),
-            ("feroxbuster", "Recursive content discovery"),
-            ("curl", "HTTP client"),
-            ("wget", "File download"),
-            ("nc", "Netcat"),
-            ("python3", "Python scripting"),
+            "nmap", "gobuster", "ffuf", "sqlmap", "nuclei", "nikto",
+            "hydra", "wpscan", "curl", "nc", "python3",
         ]
-
-        for tool, desc in tools_to_check:
-            if shutil.which(tool):
-                tools_available.append(f"{tool}")
+        tools_available = [t for t in tools_to_check if shutil.which(t)]
 
         if tools_available:
-            # Group in chunks of 6 for readability
-            tool_str = ", ".join(tools_available[:12])
-            sections.append(f"- **Available Tools**: {tool_str}")
+            sections.append(f"- **Tools**: {', '.join(tools_available[:10])}")
 
         # Wordlist locations
         wordlist_paths = [
             "/usr/share/wordlists",
             "/usr/share/seclists",
-            "/opt/SecLists",
             os.path.expanduser("~/wordlists"),
-            os.path.expanduser("~/SecLists"),
         ]
+        found = [p for p in wordlist_paths if os.path.isdir(p)]
+        if found:
+            sections.append(f"- **Wordlists**: {', '.join(found[:2])}")
 
-        found_wordlists = []
-        for path in wordlist_paths:
-            if os.path.isdir(path):
-                found_wordlists.append(path)
+        if len(sections) > 2:
+            return f"""## Environment (Auto-Detected)
 
-        if found_wordlists:
-            sections.append(f"- **Wordlists**: {', '.join(found_wordlists[:2])}")
-
-        # Only return if we have meaningful content
-        if len(sections) > 2:  # More than just OS and hostname
-            return f"""## Environment Context (Auto-Detected)
-
-{chr(10).join(sections)}
-
-*This context is auto-injected to improve assessment accuracy.*"""
+{chr(10).join(sections)}"""
 
         return ""
 
     def build_for_checkpoint(self, checkpoint_percent: int) -> str:
         """
-        Build a checkpoint reminder to inject into conversation.
-
-        Uses the new engine-based checkpoint prompt system.
+        Build a checkpoint reminder.
 
         Args:
             checkpoint_percent: The checkpoint percentage (20, 40, 60, 80, 90).
@@ -548,24 +375,28 @@ swarm(agent_type="scanner", task="Scan /api/* endpoints for authentication bypas
         Returns:
             Checkpoint reminder string.
         """
-        # Get findings count if available from budget info
         findings_count = self._budget_info.get("findings_count", 0)
 
-        # Determine current phase from percentage
         if checkpoint_percent <= 20:
-            current_phase = "reconnaissance"
+            phase = "reconnaissance"
+            guidance = "Have you discovered all entry points? Time to start testing."
         elif checkpoint_percent <= 40:
-            current_phase = "enumeration"
+            phase = "enumeration"
+            guidance = "Focus on the most promising attack vectors."
         elif checkpoint_percent <= 80:
-            current_phase = "exploitation"
+            phase = "exploitation"
+            guidance = "Validate findings with PoC. Document everything."
         else:
-            current_phase = "post_exploit"
+            phase = "reporting"
+            guidance = "Time to wrap up. Generate final report."
 
-        return engine_get_checkpoint_prompt(
-            percent_complete=checkpoint_percent,
-            findings_count=findings_count,
-            current_phase=current_phase,
-        )
+        return f"""## Checkpoint: {checkpoint_percent}% Budget Used
+
+**Current Phase**: {phase}
+**Findings So Far**: {findings_count}
+**Guidance**: {guidance}
+
+Review your progress and adjust strategy if needed."""
 
 
 def build_default_prompt(
@@ -602,7 +433,6 @@ def build_default_prompt(
     return builder.build()
 
 
-# Convenience function for CTF mode
 def build_ctf_prompt(
     target: str,
     challenge_name: str = "CTF Challenge",
@@ -637,10 +467,9 @@ def build_ctf_prompt(
 
 
 # ==================== Minimal Prompt System ====================
-# Generic, token-efficient prompt for container-based execution
-# Uses only 3 tools: generic_linux_command, execute_code, web_request
+# For container-based execution with minimal tools
 
-MINIMAL_SYSTEM_PROMPT = """You are an autonomous penetration testing agent operating in a Kali Linux container.
+MINIMAL_SYSTEM_PROMPT = """You are an autonomous penetration testing agent in Kali Linux.
 
 ## Objective
 {objective}
@@ -649,138 +478,50 @@ MINIMAL_SYSTEM_PROMPT = """You are an autonomous penetration testing agent opera
 {target}
 
 ## Environment
-Kali Linux container with full network access and comprehensive toolkit:
+Kali Linux with full toolkit: nmap, gobuster, sqlmap, nuclei, nikto, hydra, curl, python3
 
-**Network Scanning**: nmap, masscan
-**Web Fuzzing**: gobuster, ffuf, dirb, feroxbuster
-**Vulnerability Scanners**: nikto, sqlmap, nuclei, wpscan
-**Password Attacks**: hydra, john, hashcat, medusa
-**Exploitation**: searchsploit (exploitdb)
-**Recon/OSINT**: subfinder, amass, dnsrecon, whatweb, wafw00f
-**Utilities**: curl, wget, python3, netcat, jq, git
-
-**Wordlists** (SecLists installed):
-- Discovery: /usr/share/seclists/Discovery/Web-Content/
-- Fuzzing: /usr/share/seclists/Fuzzing/
-- Passwords: /usr/share/seclists/Passwords/
-- Common: /usr/share/wordlists/
-
-**Workspace**: /workspace/ (persistent storage)
-
-## Tools
-You have exactly 3 tools:
-
-1. **generic_linux_command**: Execute ANY Linux command
-   - All pentesting tools above are available
-   - Returns: stdout, stderr, return_code
-
-2. **execute_code**: Run Python/Bash scripts
-   - Custom exploits, data processing, automation
-   - Supports: python, bash
-
-3. **web_request**: HTTP requests with full control
-   - Method, headers, body, cookies, redirects
-   - Returns: status, headers, body
+## Wordlists
+/usr/share/seclists/ - Discovery, Fuzzing, Passwords
 
 ## Strategy
-1. Enumerate thoroughly (nmap, gobuster, ffuf)
+1. Enumerate thoroughly (nmap, gobuster)
 2. Identify vulnerabilities (nuclei, nikto, sqlmap)
-3. Exploit and validate findings
-4. Document everything in /workspace/
+3. Exploit and validate
+4. Document findings
 
-## CORS Testing (MANDATORY)
-When testing for CORS vulnerabilities:
-1. Test with Origin headers: `curl -H "Origin: https://evil.com" -I <target>`
-2. Check for `Access-Control-Allow-Origin: *` or reflection of Origin
-3. Test null origin: `curl -H "Origin: null" -I <target>`
-4. **ALWAYS create HTML PoC** for any CORS vulnerability found
-
-CORS PoC template (save to /workspace/cors_poc.html):
-```html
-<!DOCTYPE html>
-<html>
-<head><title>CORS PoC</title></head>
-<body>
-<h1>CORS Vulnerability PoC</h1>
-<div id="result"></div>
-<script>
-var xhr = new XMLHttpRequest();
-xhr.onreadystatechange = function() {{
-    if (xhr.readyState == 4) {{
-        document.getElementById("result").innerHTML =
-            "<pre>Status: " + xhr.status + "\\n" + xhr.responseText + "</pre>";
-    }}
-}};
-xhr.open("GET", "VULNERABLE_URL_HERE", true);
-xhr.withCredentials = true;
-xhr.send();
-</script>
-</body>
-</html>
-```
-
-Be methodical. Think step-by-step. Get root."""
+Be methodical. Get root."""
 
 
 def build_minimal_prompt(target: str, objective: str) -> str:
-    """
-    Build a minimal, token-efficient system prompt (~500 tokens).
-
-    This prompt is designed for container-based execution with only
-    3 generic tools. No tool hints, no complex formatting.
-
-    Args:
-        target: Target URL or IP address.
-        objective: What to accomplish.
-
-    Returns:
-        Minimal system prompt string.
-    """
-    return MINIMAL_SYSTEM_PROMPT.format(
-        target=target,
-        objective=objective,
-    )
+    """Build a minimal, token-efficient system prompt."""
+    return MINIMAL_SYSTEM_PROMPT.format(target=target, objective=objective)
 
 
 class MinimalPromptBuilder:
-    """
-    Minimal prompt builder for container-based execution.
-
-    Unlike SystemPromptBuilder which uses the full engine-based
-    prompt system, this builder creates lightweight prompts
-    optimized for the 3-tool architecture.
-    """
+    """Minimal prompt builder for container-based execution."""
 
     def __init__(self) -> None:
-        """Initialize the minimal prompt builder."""
         self._target: str = ""
         self._objective: str = "Perform security assessment"
         self._context: dict[str, Any] = {}
 
     def set_target(self, target: str) -> MinimalPromptBuilder:
-        """Set the target."""
         self._target = target
         return self
 
     def set_objective(self, objective: str) -> MinimalPromptBuilder:
-        """Set the objective."""
         self._objective = objective
         return self
 
     def add_context(self, key: str, value: Any) -> MinimalPromptBuilder:
-        """Add optional context."""
         self._context[key] = value
         return self
 
     def build(self) -> str:
-        """Build the minimal prompt."""
         prompt = build_minimal_prompt(self._target, self._objective)
-
-        # Add optional context if provided
         if self._context:
             context_lines = ["\n## Additional Context"]
             for key, value in self._context.items():
                 context_lines.append(f"- **{key}**: {value}")
             prompt += "\n".join(context_lines)
-
         return prompt
