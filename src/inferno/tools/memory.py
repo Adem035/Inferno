@@ -705,12 +705,10 @@ def find_similar_targets(target: str) -> list[str]:
             # Extract the target part after "target_"
             col_target = col_name[7:]  # Remove "target_" prefix
 
-            # Similar if they share common parts (e.g., same IP different ports)
-            # or one is a substring of the other
-            if sanitized in col_target or col_target in sanitized:
-                similar.append(col_name)
-            # Check for IP similarity (same network)
-            elif _targets_similar(sanitized, col_target):
+            # Similar if: substring match, or same network/domain
+            if (sanitized in col_target
+                    or col_target in sanitized
+                    or _targets_similar(sanitized, col_target)):
                 similar.append(col_name)
 
     except Exception as e:
