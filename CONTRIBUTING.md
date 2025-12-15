@@ -52,8 +52,8 @@ Good first issues are labeled `good-first-issue`. These are typically:
 
 ```bash
 # Fork on GitHub, then:
-git clone https://github.com/YOUR_USERNAME/inferno-ai.git
-cd inferno-ai
+git clone https://github.com/YOUR_USERNAME/Inferno.git
+cd Inferno
 ```
 
 ### 2. Create Virtual Environment

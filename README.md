@@ -287,8 +287,8 @@ flowchart TB
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/inferno-ai.git
-cd inferno-ai
+git clone https://github.com/Adem035/Inferno.git
+cd Inferno
 
 # Create virtual environment
 python -m venv venv
@@ -310,8 +310,8 @@ All security tools included - nothing else to install!
 
 ```powershell
 # Clone the repository
-git clone https://github.com/yourusername/inferno-ai.git
-cd inferno-ai
+git clone https://github.com/Adem035/Inferno.git
+cd Inferno
 
 # Create .env file with your authentication
 copy .env.example .env

@@ -43,8 +43,8 @@ This guide covers detailed installation instructions for Inferno-AI.
 
 ```bash
 # One-liner for quick setup (requires Python 3.11+ and Docker)
-git clone https://github.com/yourusername/inferno-ai.git && \
-cd inferno-ai && \
+git clone https://github.com/Adem035/Inferno.git && \
+cd Inferno && \
 python -m venv venv && \
 source venv/bin/activate && \
 pip install -e . && \
@@ -97,8 +97,8 @@ docker run hello-world
 ### 3. Clone Inferno
 
 ```bash
-git clone https://github.com/yourusername/inferno-ai.git
-cd inferno-ai
+git clone https://github.com/Adem035/Inferno.git
+cd Inferno
 ```
 
 ### 4. Create Virtual Environment
@@ -197,8 +197,8 @@ The easiest way to run Inferno on Windows with all security tools included.
 
 **Step 2: Clone Inferno**
 ```powershell
-git clone https://github.com/yourusername/inferno-ai.git
-cd inferno-ai
+git clone https://github.com/Adem035/Inferno.git
+cd Inferno
 ```
 
 **Step 3: Create .env file**
@@ -249,8 +249,8 @@ newgrp docker
 
 **Step 3: Clone and Install**
 ```bash
-git clone https://github.com/yourusername/inferno-ai.git
-cd inferno-ai
+git clone https://github.com/Adem035/Inferno.git
+cd Inferno
 python3.11 -m venv venv
 source venv/bin/activate
 pip install -e .
@@ -408,7 +408,7 @@ inferno setup --install-tools
 ## Updating Inferno
 
 ```bash
-cd inferno-ai
+cd Inferno
 git pull origin main
 pip install -e . --upgrade
 ```

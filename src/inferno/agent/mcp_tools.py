@@ -181,10 +181,16 @@ async def memory_store(args: dict[str, Any]) -> dict[str, Any]:
     if args.get("proof"):
         metadata["proof"] = args["proof"]
 
+    # Key findings with severity should go to both episodic and semantic
+    memory_type = args.get("memory_type", "findings")
+    has_severity = bool(args.get("severity"))
+    memory_scope = "both" if (has_severity or memory_type == "findings") else "episodic"
+
     result = await mem_tool.execute(
         operation="store",
         content=args["content"],
-        memory_type=args.get("memory_type", "findings"),
+        memory_type=memory_type,
+        memory_scope=memory_scope,  # Key findings go to BOTH for cross-session access
         metadata=metadata,
         target=_current_target,  # Pass global target for episodic memory
     )
@@ -229,6 +235,7 @@ async def memory_search(args: dict[str, Any]) -> dict[str, Any]:
         operation="search",
         content=args["query"],
         memory_type=args.get("memory_type", "findings"),
+        memory_scope="both",  # Search BOTH episodic (target-specific) and semantic (global)
         limit=args.get("limit", 10),
         threshold=threshold,
         target=_current_target,  # Pass global target for episodic memory
@@ -359,6 +366,7 @@ async def checkpoint(args: dict[str, Any]) -> dict[str, Any]:
         operation="checkpoint",
         content=content,
         metadata=metadata,
+        target=_current_target,  # Pass target for episodic memory
     )
 
     if result.success:
@@ -450,7 +458,9 @@ Remediation: {remediation}"""
             operation="store",
             content=content,
             memory_type="finding",
+            memory_scope="both",  # Store to BOTH episodic and semantic for key findings
             metadata=metadata,
+            target=_current_target,  # CRITICAL: Pass target for episodic memory
         )
 
         if result.success:
