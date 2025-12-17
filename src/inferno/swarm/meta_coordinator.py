@@ -27,6 +27,11 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+# Performance Assessment Framework - Stanford paper Section 3.2
+# S_total = Σ(TC_i + W_i) where TC = DC + EC (exploited) or DC + EC*0.8 (verified)
+from inferno.core.assessment_scoring import (
+    AssessmentScorer,
+)
 from inferno.swarm.message_bus import (
     MessageType,
     get_message_bus,
@@ -179,6 +184,17 @@ class Finding:
     cvss_score: float | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     validated_at: datetime | None = None
+
+    # Performance Assessment Framework - Stanford paper Section 3.2
+    # Technical Complexity (TC) = DC + EC (exploited) or DC + EC*0.8 (verified, 20% penalty)
+    # Business Impact Weight (W) = Critical:8, High:5, Medium:3, Low:2, Info:1
+    # Total Score (S) = TC + W
+    detection_complexity: int = 5  # DC: 1-10 (how hard to detect)
+    exploit_complexity: int = 5    # EC: 1-10 (how hard to exploit)
+    exploitation_status: str = "suspected"  # exploited, verified, suspected
+    technical_complexity_score: float = 0.0  # TC = DC + EC (or DC + EC*0.8)
+    business_impact_weight: int = 0  # W based on severity
+    total_score: float = 0.0  # S = TC + W
 
 
 @dataclass
@@ -360,6 +376,11 @@ class MetaCoordinator:
 
         # Message bus for inter-agent communication
         self._message_bus = get_message_bus()
+
+        # Performance Assessment Scorer - Stanford paper Section 3.2
+        # Tracks S_total = Σ(TC_i + W_i) across all findings
+        self._assessment_scorer = AssessmentScorer(operation_id, target)
+        logger.info("assessment_scorer_initialized", operation_id=operation_id, target=target)
 
         # Shared context that all workers can access
         self._shared_context: dict[str, Any] = {
@@ -1354,6 +1375,37 @@ Format the report professionally with clear reproduction steps.""",
                     else:
                         finding.confidence = 80  # Default for confirmed
 
+                    # Determine exploitation status for TC scoring
+                    # "exploited" = full POC with demonstrated impact
+                    # "verified" = confirmed vulnerable but no full exploitation
+                    exploited = "exploit" in result_lower or "poc" in result_lower or finding.poc is not None
+                    finding.exploitation_status = "exploited" if exploited else "verified"
+
+                    # Score the finding using Performance Assessment Framework
+                    # TC = DC + EC (exploited) or DC + EC*0.8 (verified, 20% penalty)
+                    vuln_score = self._assessment_scorer.add_finding(
+                        vuln_type=finding.vuln_type,
+                        severity=finding.severity,
+                        exploited=exploited,
+                        confidence=finding.confidence,
+                    )
+
+                    # Update finding with TC scores
+                    finding.detection_complexity = vuln_score.technical_complexity.detection_complexity
+                    finding.exploit_complexity = vuln_score.technical_complexity.exploit_complexity
+                    finding.technical_complexity_score = vuln_score.technical_complexity.score
+                    finding.business_impact_weight = vuln_score.business_impact_weight
+                    finding.total_score = vuln_score.total_score
+
+                    logger.info(
+                        "finding_scored",
+                        finding_id=finding.finding_id,
+                        tc_score=finding.technical_complexity_score,
+                        business_weight=finding.business_impact_weight,
+                        total_score=finding.total_score,
+                        exploitation_status=finding.exploitation_status,
+                    )
+
                 elif "false.?positive" in result_lower or "not.?valid" in result_lower:
                     finding.status = FindingStatus.FALSE_POSITIVE
                     finding.confidence = 0
@@ -1402,3 +1454,149 @@ Format the report professionally with clear reproduction steps.""",
     def validated_findings(self) -> list[Finding]:
         """Get validated findings only."""
         return self._state.validated_findings
+
+    @property
+    def assessment_score(self) -> float:
+        """
+        Get total assessment score (S_total) from Stanford paper Section 3.2.
+
+        S_total = Σ(TC_i + W_i) where:
+        - TC = DC + EC (exploited) or DC + EC*0.8 (verified, 20% penalty)
+        - W = Business impact weight (Critical:8, High:5, Medium:3, Low:2, Info:1)
+        """
+        return self._assessment_scorer.current_score.total_score
+
+    @property
+    def assessment_summary(self) -> str:
+        """Get human-readable assessment score summary."""
+        return self._assessment_scorer.get_summary()
+
+    def get_assessment_report(self) -> dict:
+        """
+        Get complete assessment scoring report.
+
+        Returns dict with:
+        - total_score: S_total = Σ(TC_i + W_i)
+        - finding_count: Number of validated findings
+        - exploited_count: Findings with full exploitation
+        - verified_count: Findings verified but not exploited (20% EC penalty)
+        - exploitation_rate: Percentage of findings exploited
+        - severity_breakdown: Count by severity level
+        """
+        return self._assessment_scorer.current_score.to_dict()
+
+    async def run_parallel_swarm(
+        self,
+        task_description: str,
+        max_parallel: int = 8,
+    ) -> dict[str, Any]:
+        """
+        Execute a task using the ParallelSwarmOrchestrator (Claude Code-style).
+
+        This method provides TRUE PARALLEL execution of workers, similar to how
+        Claude Code spawns multiple sub-agents simultaneously. The task is
+        automatically decomposed into parallelizable subtasks.
+
+        Args:
+            task_description: High-level task to execute (e.g., "Full security assessment")
+            max_parallel: Maximum concurrent workers (default: 8)
+
+        Returns:
+            Dict with execution results including:
+            - total_tasks: Number of subtasks executed
+            - completed_tasks: Successfully completed
+            - failed_tasks: Failed tasks
+            - total_findings: Vulnerabilities discovered
+            - execution_time_seconds: Total wall-clock time
+            - parallelism_achieved: How much parallelism was achieved (>1 = parallel)
+            - aggregated_output: Combined results from all workers
+
+        Example:
+            coordinator = MetaCoordinator(target="https://example.com", ...)
+            result = await coordinator.run_parallel_swarm("Perform full security assessment")
+            print(f"Found {result['total_findings']} vulns in {result['execution_time_seconds']}s")
+        """
+        from inferno.swarm.parallel_orchestrator import ParallelSwarmOrchestrator
+
+        logger.info(
+            "parallel_swarm_starting",
+            task=task_description[:100],
+            max_parallel=max_parallel,
+        )
+
+        # Create parallel orchestrator
+        orchestrator = ParallelSwarmOrchestrator(
+            target=self._state.target,
+            operation_id=self._operation_id,
+            objective=self._state.objective,
+            max_parallel_workers=max_parallel,
+            model=self._model,
+            on_finding=lambda f: self._handle_parallel_finding(f),
+        )
+
+        # Decompose the task into parallel subtasks
+        tasks = orchestrator.decompose_task(task_description, self._state.target)
+        orchestrator.add_tasks(tasks)
+
+        # Execute all tasks in parallel
+        result = await orchestrator.execute_parallel()
+
+        # Update MetaCoordinator state with results
+        self._shared_context.update(orchestrator.shared_context)
+
+        logger.info(
+            "parallel_swarm_complete",
+            total_tasks=result.total_tasks,
+            findings=result.total_findings,
+            parallelism=f"{result.parallelism_achieved:.2f}x",
+            time=f"{result.execution_time_seconds:.1f}s",
+        )
+
+        return {
+            "total_tasks": result.total_tasks,
+            "completed_tasks": result.completed_tasks,
+            "failed_tasks": result.failed_tasks,
+            "total_findings": result.total_findings,
+            "execution_time_seconds": result.execution_time_seconds,
+            "parallelism_achieved": result.parallelism_achieved,
+            "success_rate": result.success_rate,
+            "aggregated_output": result.aggregated_output,
+            "task_results": [
+                {
+                    "task_id": t.task_id,
+                    "worker_type": t.worker_type.value,
+                    "status": t.status,
+                    "duration": t.actual_duration_seconds,
+                    "findings": len(t.findings),
+                }
+                for t in result.task_results
+            ],
+        }
+
+    def _handle_parallel_finding(self, finding: dict) -> None:
+        """Handle a finding from parallel swarm execution."""
+        # Create Finding object
+        self._finding_counter += 1
+        finding_obj = Finding(
+            finding_id=f"parallel_{self._finding_counter}",
+            vuln_type=finding.get("vuln_type", "unknown"),
+            severity=finding.get("severity", "medium"),
+            title=finding.get("title", "Unknown vulnerability"),
+            description=finding.get("evidence", ""),
+            target=self._state.target,
+            evidence=finding.get("evidence", ""),
+            source_worker=WorkerType.SCANNER,
+            source_task_id="parallel_swarm",
+            confidence=finding.get("confidence", 70),
+        )
+        self._state.findings.append(finding_obj)
+
+        # Publish to message bus
+        _safe_create_task(
+            publish_finding(
+                sender="parallel_orchestrator",
+                finding=finding,
+            ),
+            name="publish_parallel_finding",
+            logger_instance=logger,
+        )
