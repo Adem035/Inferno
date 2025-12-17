@@ -94,9 +94,9 @@ class SwarmTool(CoreTool):
                 "max_turns": {
                     "type": "integer",
                     "description": "Maximum turns for the sub-agent",
-                    "default": 20,
+                    "default": 100,
                     "minimum": 1,
-                    "maximum": 50,
+                    "maximum": 200,
                 },
             },
             "required": ["agent_type", "task"],
@@ -242,7 +242,7 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
         task: str,
         context: str | None = None,
         custom_prompt: str | None = None,
-        max_turns: int = 20,
+        max_turns: int = 100,
         **kwargs: Any,
     ) -> ToolResult:
         """
@@ -286,7 +286,7 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
                 )
 
         # Override max_turns if specified
-        config.max_turns = min(max_turns, 50)
+        config.max_turns = min(max_turns, 200)
 
         logger.info(
             "spawning_subagent",

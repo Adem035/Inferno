@@ -115,3 +115,4 @@ htmlcov/
 # Qdrant data
 qdrant_data/
 qdrant_storage/
+ARTEMIS/

@@ -52,7 +52,7 @@ class SubAgentConfig:
     name: str
     system_prompt: str
     tools: list[str] = field(default_factory=lambda: CORE_TOOLS.copy())
-    max_turns: int = 20
+    max_turns: int = 100
     max_tokens: int = 100_000
     temperature: float = 0.7
 
@@ -83,7 +83,7 @@ ffuf -u <url>/FUZZ -w wordlist.txt       # Directory fuzzing
 ## Output
 Report: subdomains, open ports, technologies, endpoints, potential vulns.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=25,
+        max_turns=100,
     ),
 
     SubAgentType.SCANNER: SubAgentConfig(
@@ -114,7 +114,7 @@ curl -X OPTIONS <url> -v                 # Check methods
 ## Output
 List vulnerabilities with severity, endpoint, and evidence.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=25,
+        max_turns=100,
     ),
 
     SubAgentType.EXPLOITER: SubAgentConfig(
@@ -228,7 +228,7 @@ chmod +x poc_vuln_name.py
 2. **Standalone PoC script file** that anyone can run to reproduce
 3. **List of bypass techniques attempted** (if any protections were encountered)""",
         tools=CORE_TOOLS.copy(),
-        max_turns=30,
+        max_turns=100,
     ),
 
     SubAgentType.POST_EXPLOITATION: SubAgentConfig(
@@ -265,7 +265,7 @@ cat /etc/hosts
 ## Output
 Report: escalation paths, credentials found, internal network map.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=25,
+        max_turns=100,
     ),
 
     SubAgentType.VALIDATOR: SubAgentConfig(
@@ -294,7 +294,7 @@ Report: escalation paths, credentials found, internal network map.""",
 ## Output
 For each finding: CONFIRMED or FALSE_POSITIVE with evidence.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=20,
+        max_turns=100,
     ),
 
     SubAgentType.WAF_BYPASS: SubAgentConfig(
@@ -334,7 +334,7 @@ Transfer-Encoding: chunked
 ## Output
 Working bypass payloads with the technique used.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=20,
+        max_turns=100,
     ),
 
     SubAgentType.TOKEN_FORGERY: SubAgentConfig(
@@ -375,7 +375,7 @@ hashcat -a 0 -m 16500 jwt.txt wordlist.txt
 ## Output
 Working auth bypass or token forgery with steps.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=25,
+        max_turns=100,
     ),
 
     SubAgentType.API_FLOW: SubAgentConfig(
@@ -420,7 +420,7 @@ curl <url>/api/users/2  # Change ID
 ## Output
 API vulnerabilities with endpoints and payloads.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=25,
+        max_turns=100,
     ),
 
     SubAgentType.BUSINESS_LOGIC: SubAgentConfig(
@@ -458,7 +458,7 @@ Horizontal privilege escalation
 ## Output
 Business logic flaws with reproduction steps and impact.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=25,
+        max_turns=100,
     ),
 
     SubAgentType.REPORTER: SubAgentConfig(
@@ -523,7 +523,7 @@ Every finding MUST have a working PoC script that:
 ## Output
 Complete security report with working PoC scripts for each finding.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=15,
+        max_turns=100,
     ),
 
     SubAgentType.ANALYZER: SubAgentConfig(
@@ -578,7 +578,7 @@ for p in '{{7*7}}' '\\${7*7}' '<%=7*7%>'; do curl -s "URL?param=$p"; done
 ## Output
 Detailed analysis with confirmed vulnerabilities and PoC code.""",
         tools=CORE_TOOLS.copy(),
-        max_turns=25,
+        max_turns=100,
     ),
 
     # =========================================================================
@@ -639,7 +639,7 @@ List all discovered IoT devices with:
 - Identified vulnerabilities
 - Default credential results""",
         tools=CORE_TOOLS.copy(),
-        max_turns=30,
+        max_turns=100,
     ),
 
     SubAgentType.FIRMWARE_ANALYST: SubAgentConfig(
@@ -702,7 +702,7 @@ checksec --file=./bin/httpd                 # Security features
 - Vulnerable binaries with PoC
 - Recommendations for exploitation""",
         tools=CORE_TOOLS.copy(),
-        max_turns=35,
+        max_turns=100,
     ),
 
     SubAgentType.MEMORY_FORENSICS: SubAgentConfig(
@@ -770,7 +770,7 @@ session.*=|cookie.*=|jwt.*=
 - Timeline of activities if possible
 - PoC for credential usage""",
         tools=CORE_TOOLS.copy(),
-        max_turns=30,
+        max_turns=100,
     ),
 
     SubAgentType.RADIO_ANALYST: SubAgentConfig(
@@ -834,7 +834,7 @@ gnuradio-companion                          # Signal processing
 - Replay attack PoC if applicable
 - Security recommendations""",
         tools=CORE_TOOLS.copy(),
-        max_turns=25,
+        max_turns=100,
     ),
 
     SubAgentType.REVERSE_ENGINEER: SubAgentConfig(
@@ -915,7 +915,7 @@ if (strcmp(password, "admin123") == 0)
 - Working PoC exploits
 - Recommendations""",
         tools=CORE_TOOLS.copy(),
-        max_turns=40,
+        max_turns=100,
     ),
 }
 
@@ -936,7 +936,7 @@ def create_custom_agent(
     name: str,
     system_prompt: str,
     tools: list[str] | None = None,
-    max_turns: int = 20,
+    max_turns: int = 100,
 ) -> SubAgentConfig:
     """
     Create a custom sub-agent configuration.

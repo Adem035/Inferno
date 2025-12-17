@@ -8,6 +8,8 @@ the existing Inferno infrastructure (Mem0/Qdrant for semantic memory).
 
 from __future__ import annotations
 
+import asyncio
+import uuid
 from typing import Any
 
 import structlog
@@ -600,12 +602,17 @@ async def register_swarm(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# Track background swarm tasks
+_background_swarm_tasks: dict[str, asyncio.Task] = {}
+_background_swarm_results: dict[str, dict] = {}
+
+
 @tool(
     "swarm",
     "SPAWN WORKERS IN PARALLEL! Don't test manually - delegate to specialized sub-agents. "
     "CRITICAL: Spawn MULTIPLE workers simultaneously for each discovered endpoint, parameter, and vuln type. "
-    "Example workflow: Found /login, /search, /api → spawn 3 scanner workers in parallel! "
-    "Each worker runs independently and returns findings. "
+    "Use background=true to spawn and CONTINUE WORKING while workers run! "
+    "Example: spawn 5 workers with background=true, then continue your own testing. "
     "AGENT TYPES: "
     "reconnaissance (enumeration, tech discovery) | "
     "scanner (vuln detection per endpoint) | "
@@ -616,12 +623,13 @@ async def register_swarm(args: dict[str, Any]) -> dict[str, Any]:
     "business_logic (logic flaws) | "
     "post_exploitation (privesc) | "
     "IOT: iot_scanner, firmware_analyst, memory_forensics, radio_analyst, reverse_engineer. "
-    "SPAWN 5-10 WORKERS for comprehensive coverage!",
+    "SPAWN 5-10 WORKERS with background=true for maximum parallelism!",
     {
         "agent_type": str,  # reconnaissance, scanner, exploiter, validator, waf_bypass, api_flow, etc.
         "task": str,  # Specific task: "Test /login for SQLi, XSS, auth bypass"
         "context": str,  # Relevant findings and target info for the worker
-        "max_turns": int,  # Maximum turns (default: 20, max: 50)
+        "max_turns": int,  # Maximum turns (default: 100, max: 200)
+        "background": bool,  # If true, spawn in background and continue (default: false)
     }
 )
 async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
@@ -630,8 +638,11 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
 
     This is the META-AGENT pattern - the main agent can spawn specialized
     workers for parallel task execution.
+
+    When background=true, spawns the worker and returns immediately so the
+    main agent can continue working. Use swarm_status to check on workers.
     """
-    global _evaluation_metrics
+    global _evaluation_metrics, _background_swarm_tasks, _background_swarm_results
 
     swarm_tool = _get_swarm_tool()
     if swarm_tool is None:
@@ -649,15 +660,62 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
     agent_type = args.get("agent_type", "reconnaissance")
     task = args.get("task", "")
     context = args.get("context", "")
-    max_turns = min(args.get("max_turns", 20), 50)
+    max_turns = min(args.get("max_turns", 100), 200)
+    background = args.get("background", False)
 
     logger.info(
         "spawning_subagent_via_mcp",
         agent_type=agent_type,
         task=task[:100],
         max_turns=max_turns,
+        background=background,
     )
 
+    async def run_worker():
+        """Execute worker and store result."""
+        try:
+            result = await swarm_tool.execute(
+                agent_type=agent_type,
+                task=task,
+                context=context,
+                max_turns=max_turns,
+            )
+            return {
+                "success": result.success,
+                "output": result.output,
+                "error": result.error,
+                "metadata": result.metadata,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    if background:
+        # Spawn in background and return immediately
+        worker_id = f"{agent_type}_{uuid.uuid4().hex[:8]}"
+        task_obj = asyncio.create_task(run_worker())
+        _background_swarm_tasks[worker_id] = task_obj
+
+        # Set up callback to store result when done
+        def store_result(t):
+            try:
+                _background_swarm_results[worker_id] = t.result()
+            except Exception as e:
+                _background_swarm_results[worker_id] = {"success": False, "error": str(e)}
+
+        task_obj.add_done_callback(store_result)
+
+        return {
+            "content": [{
+                "type": "text",
+                "text": f"✓ Worker '{worker_id}' spawned in background.\n"
+                        f"  Type: {agent_type}\n"
+                        f"  Task: {task[:80]}...\n"
+                        f"  Max turns: {max_turns}\n\n"
+                        f"Continue working! Use swarm_status to check progress."
+            }]
+        }
+
+    # Foreground (blocking) mode
     try:
         result = await swarm_tool.execute(
             agent_type=agent_type,
@@ -691,6 +749,87 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
             }],
             "is_error": True,
         }
+
+
+@tool(
+    "swarm_status",
+    "Check status of background swarm workers. Shows running workers and completed results. "
+    "Use this to monitor progress of workers spawned with background=true.",
+    {
+        "worker_id": str,  # Optional: specific worker ID to check (leave empty for all)
+    }
+)
+async def swarm_status(args: dict[str, Any]) -> dict[str, Any]:
+    """Check status of background swarm workers."""
+    global _background_swarm_tasks, _background_swarm_results
+
+    worker_id = args.get("worker_id", "")
+
+    if worker_id:
+        # Check specific worker
+        if worker_id in _background_swarm_results:
+            result = _background_swarm_results[worker_id]
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"Worker '{worker_id}' COMPLETED:\n"
+                            f"Success: {result.get('success', False)}\n"
+                            f"Output: {result.get('output', 'N/A')[:500]}...\n"
+                            f"Error: {result.get('error', 'None')}"
+                }]
+            }
+        elif worker_id in _background_swarm_tasks:
+            task = _background_swarm_tasks[worker_id]
+            status = "RUNNING" if not task.done() else "DONE"
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"Worker '{worker_id}' status: {status}"
+                }]
+            }
+        else:
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"Worker '{worker_id}' not found."
+                }],
+                "is_error": True,
+            }
+
+    # Show all workers
+    lines = ["## Background Swarm Workers\n"]
+
+    running = []
+    completed = []
+
+    for wid, task in _background_swarm_tasks.items():
+        if task.done():
+            completed.append(wid)
+        else:
+            running.append(wid)
+
+    if running:
+        lines.append(f"**Running ({len(running)}):**")
+        for wid in running:
+            lines.append(f"  - {wid}")
+
+    if completed:
+        lines.append(f"\n**Completed ({len(completed)}):**")
+        for wid in completed:
+            result = _background_swarm_results.get(wid, {})
+            status = "✓" if result.get("success") else "✗"
+            lines.append(f"  - {wid}: {status}")
+
+    if not running and not completed:
+        lines.append("No background workers spawned yet.")
+        lines.append("Use swarm(..., background=true) to spawn workers!")
+
+    return {
+        "content": [{
+            "type": "text",
+            "text": "\n".join(lines)
+        }]
+    }
 
 
 @tool(
