@@ -1488,3 +1488,119 @@ Format the report professionally with clear reproduction steps.""",
         - severity_breakdown: Count by severity level
         """
         return self._assessment_scorer.current_score.to_dict()
+
+    async def run_parallel_swarm(
+        self,
+        task_description: str,
+        max_parallel: int = 8,
+    ) -> dict[str, Any]:
+        """
+        Execute a task using the ParallelSwarmOrchestrator (Claude Code-style).
+
+        This method provides TRUE PARALLEL execution of workers, similar to how
+        Claude Code spawns multiple sub-agents simultaneously. The task is
+        automatically decomposed into parallelizable subtasks.
+
+        Args:
+            task_description: High-level task to execute (e.g., "Full security assessment")
+            max_parallel: Maximum concurrent workers (default: 8)
+
+        Returns:
+            Dict with execution results including:
+            - total_tasks: Number of subtasks executed
+            - completed_tasks: Successfully completed
+            - failed_tasks: Failed tasks
+            - total_findings: Vulnerabilities discovered
+            - execution_time_seconds: Total wall-clock time
+            - parallelism_achieved: How much parallelism was achieved (>1 = parallel)
+            - aggregated_output: Combined results from all workers
+
+        Example:
+            coordinator = MetaCoordinator(target="https://example.com", ...)
+            result = await coordinator.run_parallel_swarm("Perform full security assessment")
+            print(f"Found {result['total_findings']} vulns in {result['execution_time_seconds']}s")
+        """
+        from inferno.swarm.parallel_orchestrator import ParallelSwarmOrchestrator
+
+        logger.info(
+            "parallel_swarm_starting",
+            task=task_description[:100],
+            max_parallel=max_parallel,
+        )
+
+        # Create parallel orchestrator
+        orchestrator = ParallelSwarmOrchestrator(
+            target=self._state.target,
+            operation_id=self._operation_id,
+            objective=self._state.objective,
+            max_parallel_workers=max_parallel,
+            model=self._model,
+            on_finding=lambda f: self._handle_parallel_finding(f),
+        )
+
+        # Decompose the task into parallel subtasks
+        tasks = orchestrator.decompose_task(task_description, self._state.target)
+        orchestrator.add_tasks(tasks)
+
+        # Execute all tasks in parallel
+        result = await orchestrator.execute_parallel()
+
+        # Update MetaCoordinator state with results
+        self._shared_context.update(orchestrator.shared_context)
+
+        logger.info(
+            "parallel_swarm_complete",
+            total_tasks=result.total_tasks,
+            findings=result.total_findings,
+            parallelism=f"{result.parallelism_achieved:.2f}x",
+            time=f"{result.execution_time_seconds:.1f}s",
+        )
+
+        return {
+            "total_tasks": result.total_tasks,
+            "completed_tasks": result.completed_tasks,
+            "failed_tasks": result.failed_tasks,
+            "total_findings": result.total_findings,
+            "execution_time_seconds": result.execution_time_seconds,
+            "parallelism_achieved": result.parallelism_achieved,
+            "success_rate": result.success_rate,
+            "aggregated_output": result.aggregated_output,
+            "task_results": [
+                {
+                    "task_id": t.task_id,
+                    "worker_type": t.worker_type.value,
+                    "status": t.status,
+                    "duration": t.actual_duration_seconds,
+                    "findings": len(t.findings),
+                }
+                for t in result.task_results
+            ],
+        }
+
+    def _handle_parallel_finding(self, finding: dict) -> None:
+        """Handle a finding from parallel swarm execution."""
+        # Create Finding object
+        self._finding_counter += 1
+        finding_obj = Finding(
+            finding_id=f"parallel_{self._finding_counter}",
+            vuln_type=finding.get("vuln_type", "unknown"),
+            severity=finding.get("severity", "medium"),
+            title=finding.get("title", "Unknown vulnerability"),
+            description=finding.get("evidence", ""),
+            target=self._state.target,
+            evidence=finding.get("evidence", ""),
+            source_worker=WorkerType.SCANNER,
+            source_task_id="parallel_swarm",
+            confidence=finding.get("confidence", 70),
+        )
+        self._state.findings.append(finding_obj)
+
+        # Publish to message bus
+        _safe_create_task(
+            publish_finding(
+                sender="parallel_orchestrator",
+                finding=finding,
+            ),
+            name="publish_parallel_finding",
+            logger_instance=logger,
+        )
