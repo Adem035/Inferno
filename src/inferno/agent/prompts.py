@@ -300,24 +300,81 @@ Create checkpoints at 20%, 40%, 60%, and 80% budget usage."""
 
     def _build_swarm_section(self) -> str:
         """Build swarm worker instructions section."""
-        return """## SWARM WORKERS - Parallelize Your Work!
+        return """## SWARM ORCHESTRATION - You Are The Coordinator!
 
-Use the `swarm` tool to spawn specialized workers:
+**YOUR ROLE**: You are the COORDINATOR. Don't do manual testing yourself - spawn workers!
 
-| Type | Use For |
-|------|---------|
-| `reconnaissance` | Fast enumeration, tech discovery |
-| `scanner` | Automated vulnerability scanning |
-| `exploiter` | Deep exploitation of specific vulns |
-| `validator` | Independent finding confirmation |
-| `waf_bypass` | WAF/filter evasion |
+### CRITICAL: Use Swarm Workers For EVERYTHING
 
-**Example:**
+**ALWAYS spawn workers when you discover:**
+- Multiple endpoints → Spawn scanner for EACH endpoint in parallel
+- Multiple input fields → Spawn exploiter for EACH field in parallel
+- Multiple vulnerability types → Spawn scanner for EACH vuln type
+- Multiple subdomains → Spawn recon for EACH subdomain
+
+### Swarm Worker Types
+
+| Type | When To Spawn |
+|------|---------------|
+| `reconnaissance` | New subdomain, new endpoint discovered, tech fingerprinting |
+| `scanner` | Each endpoint, each parameter, each input field |
+| `exploiter` | Each confirmed vuln, each injection point |
+| `validator` | Each finding needs independent verification |
+| `waf_bypass` | Any blocked payload, 403 responses |
+| `api_flow` | API endpoints, GraphQL, REST testing |
+| `business_logic` | Auth flows, payment logic, state manipulation |
+
+### Parallel Swarm Strategy (REQUIRED)
+
+**Phase 1 - Discovery**: Spawn 3-5 recon workers simultaneously
 ```
-swarm(agent_type="exploiter", task="Exploit SQLi in /search?q= to extract data")
+swarm(agent_type="reconnaissance", task="Enumerate subdomains of target.com")
+swarm(agent_type="reconnaissance", task="Directory bruteforce on target.com")
+swarm(agent_type="reconnaissance", task="Technology fingerprinting on target.com")
 ```
 
-Don't try to do everything sequentially - spawn workers for parallel efficiency!"""
+**Phase 2 - Scanning**: For EACH discovered endpoint, spawn a scanner
+```
+# Found /login, /search, /api/users, /upload → spawn 4 workers!
+swarm(agent_type="scanner", task="Test /login for SQLi, XSS, auth bypass")
+swarm(agent_type="scanner", task="Test /search?q= for SQLi, XSS, SSTI")
+swarm(agent_type="scanner", task="Test /api/users for IDOR, auth issues")
+swarm(agent_type="scanner", task="Test /upload for unrestricted upload, path traversal")
+```
+
+**Phase 3 - Exploitation**: For EACH confirmed vuln, spawn an exploiter
+```
+swarm(agent_type="exploiter", task="Exploit SQLi in /search?q= - extract DB")
+swarm(agent_type="exploiter", task="Exploit XSS in /comments - steal cookies")
+```
+
+**Phase 4 - Validation**: Each finding gets independent validation
+```
+swarm(agent_type="validator", task="Verify SQLi in /search with different payload")
+```
+
+### Coverage Checklist (Spawn Workers For Each!)
+
+□ **Endpoints**: Every URL path gets a scanner worker
+□ **Parameters**: Every GET/POST param gets tested
+□ **Input Fields**: Every form field, search box, comment box
+□ **Headers**: Host, X-Forwarded-For, Referer injection
+□ **Cookies**: Session tokens, auth cookies
+□ **File Uploads**: Every upload field
+□ **APIs**: Every API endpoint with CRUD operations
+□ **Auth**: Login, registration, password reset, session management
+
+### DO NOT:
+- ❌ Test endpoints manually one by one
+- ❌ Wait for one worker to finish before spawning another
+- ❌ Do the exploitation yourself when a worker can do it
+- ❌ Forget to spawn validators for findings
+
+### DO:
+- ✅ Spawn 5-10 workers in parallel for coverage
+- ✅ Let workers handle all testing
+- ✅ Focus on coordination and synthesis
+- ✅ Spawn new workers as discoveries come in"""
 
     def _build_environment_section(self) -> str:
         """Build environment context section."""
@@ -476,13 +533,31 @@ Kali Linux with full toolkit: nmap, gobuster, sqlmap, nuclei, nikto, hydra, curl
 ## Wordlists
 /usr/share/seclists/ - Discovery, Fuzzing, Passwords
 
-## Strategy
-1. Enumerate thoroughly (nmap, gobuster)
-2. Identify vulnerabilities (nuclei, nikto, sqlmap)
-3. Exploit and validate
-4. Document findings
+## CRITICAL: Use Swarm Workers!
 
-Be methodical. Get root."""
+You are the COORDINATOR - spawn workers for parallel testing:
+
+```
+swarm(agent_type="reconnaissance", task="Enumerate subdomains")
+swarm(agent_type="scanner", task="Test /login for SQLi, XSS")
+swarm(agent_type="exploiter", task="Exploit SQLi in /search")
+swarm(agent_type="validator", task="Verify finding independently")
+```
+
+**For EACH endpoint discovered → spawn a scanner worker**
+**For EACH vulnerability found → spawn an exploiter worker**
+**For EACH finding → spawn a validator worker**
+
+DON'T test manually - spawn 5-10 workers in parallel!
+
+## Strategy
+1. Spawn recon workers (subdomains, dirs, tech fingerprint)
+2. For each endpoint → spawn scanner worker
+3. For each vuln → spawn exploiter worker
+4. Validate all findings with validator workers
+5. Synthesize results and report
+
+Be methodical. Parallelize. Get root."""
 
 
 def build_minimal_prompt(target: str, objective: str) -> str:

@@ -602,18 +602,25 @@ async def register_swarm(args: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     "swarm",
-    "Spawn a specialized sub-agent to handle a specific task. Sub-agents are "
-    "autonomous agents with focused capabilities. Use this to delegate tasks like "
-    "reconnaissance, vulnerability scanning, exploitation attempts, IoT device discovery, "
-    "firmware analysis, or reverse engineering. "
-    "The sub-agent will execute independently and return results when complete. "
-    "Available types: "
-    "WEB/NETWORK: reconnaissance, scanner, exploiter, post_exploitation, analyzer, researcher, validator, waf_bypass, token_forgery, api_flow, business_logic, privesc. "
-    "IOT/HARDWARE: iot_scanner, firmware_analyst, memory_forensics, radio_analyst, reverse_engineer.",
+    "SPAWN WORKERS IN PARALLEL! Don't test manually - delegate to specialized sub-agents. "
+    "CRITICAL: Spawn MULTIPLE workers simultaneously for each discovered endpoint, parameter, and vuln type. "
+    "Example workflow: Found /login, /search, /api → spawn 3 scanner workers in parallel! "
+    "Each worker runs independently and returns findings. "
+    "AGENT TYPES: "
+    "reconnaissance (enumeration, tech discovery) | "
+    "scanner (vuln detection per endpoint) | "
+    "exploiter (exploit confirmed vulns) | "
+    "validator (independent finding verification) | "
+    "waf_bypass (evade filters) | "
+    "api_flow (API testing) | "
+    "business_logic (logic flaws) | "
+    "post_exploitation (privesc) | "
+    "IOT: iot_scanner, firmware_analyst, memory_forensics, radio_analyst, reverse_engineer. "
+    "SPAWN 5-10 WORKERS for comprehensive coverage!",
     {
-        "agent_type": str,  # Type of sub-agent (see description for available types)
-        "task": str,  # Specific task description for the sub-agent
-        "context": str,  # Additional context (findings, target info)
+        "agent_type": str,  # reconnaissance, scanner, exploiter, validator, waf_bypass, api_flow, etc.
+        "task": str,  # Specific task: "Test /login for SQLi, XSS, auth bypass"
+        "context": str,  # Relevant findings and target info for the worker
         "max_turns": int,  # Maximum turns (default: 20, max: 50)
     }
 )
