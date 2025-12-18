@@ -904,3 +904,46 @@ def reset_credential_manager() -> None:
     """Reset the singleton CredentialManager instance."""
     global _credential_manager
     _credential_manager = None
+
+
+def setup_sdk_auth() -> str | None:
+    """
+    Set up authentication for Claude Agent SDK.
+
+    The Claude Agent SDK runs the claude CLI as a subprocess. This function
+    ensures the subprocess has access to credentials by:
+    1. Getting credentials from Inferno's credential manager
+    2. Setting ANTHROPIC_API_KEY environment variable if we have an API key
+    3. Returning the cli_path for OAuth-authenticated CLI
+
+    Returns:
+        Path to claude CLI if found, None otherwise.
+
+    Note:
+        For OAuth authentication, the SDK uses the cli_path to run
+        an already-authenticated claude CLI. For API key auth, we
+        set the environment variable so the subprocess can use it.
+    """
+    import shutil
+
+    # Get CLI path
+    cli_path = shutil.which("claude")
+
+    # Try to get credentials and set env var as fallback
+    try:
+        credential = get_credential_manager().get_credential()
+
+        # If it's an API key (not OAuth), set the env var
+        if not credential.is_oauth:
+            os.environ["ANTHROPIC_API_KEY"] = credential.get_value()
+            logger.debug("sdk_auth_api_key_set")
+        else:
+            # For OAuth, ensure the SDK knows to use the CLI
+            # The CLI should already have the OAuth token from `claude login`
+            logger.debug("sdk_auth_oauth_mode", cli_path=cli_path)
+
+    except CredentialError as e:
+        # No credentials available - SDK will need to rely on CLI auth
+        logger.warning("sdk_auth_no_credentials", error=str(e))
+
+    return cli_path

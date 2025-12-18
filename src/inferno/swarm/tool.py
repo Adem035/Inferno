@@ -360,6 +360,10 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
             import tempfile
             subagent_cwd = tempfile.mkdtemp(prefix=f"inferno_subagent_{agent_type}_")
 
+            # Set up authentication for Claude Agent SDK
+            from inferno.auth import setup_sdk_auth
+            cli_path = setup_sdk_auth()
+
             # Extended thinking for subagents - enables deeper reasoning
             # Use 32k budget for subagents (less than main agent but still substantial)
             thinking_budget = 32000
@@ -373,6 +377,7 @@ You are a specialized security testing AI assistant embedded within **Inferno**,
                 can_use_tool=auto_approve_tools,
                 model=self._model,
                 max_thinking_tokens=thinking_budget,  # Enable extended thinking
+                cli_path=cli_path,  # Use authenticated claude CLI
             )
             console.print(f"[magenta]│[/magenta] [dim]Working dir: {subagent_cwd} | Thinking: {thinking_budget} tokens[/dim]")
 

@@ -25,6 +25,7 @@ from inferno.auth.credentials import (
     KeychainCredentialProvider,
     get_api_key,
     get_credential_manager,
+    setup_sdk_auth,
 )
 
 __all__ = [
@@ -47,4 +48,5 @@ __all__ = [
     "KeychainCredentialProvider",
     "get_credential_manager",
     "get_api_key",
+    "setup_sdk_auth",
 ]

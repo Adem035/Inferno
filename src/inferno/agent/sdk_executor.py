@@ -1771,6 +1771,10 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
             # Always allow all tools - this is a pentesting agent
             return PermissionResultAllow()
 
+        # Set up authentication for Claude Agent SDK
+        from inferno.auth import setup_sdk_auth
+        cli_path = setup_sdk_auth()
+
         # Configure SDK options
         options = ClaudeAgentOptions(
             max_turns=config.max_turns,
@@ -1779,6 +1783,7 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
             cwd=str(config.working_dir or artifacts_dir),
             mcp_servers={"inferno": inferno_mcp},
             can_use_tool=auto_approve_tools,
+            cli_path=cli_path,  # Use authenticated claude CLI
         )
 
         if config.model:
@@ -2404,17 +2409,17 @@ Previous attack '{detected_attack}' appears blocked/failed.
                 # Process initial response
                 stop_reason, objective_met, error = await process_response_stream(client)
 
-                # Log why we're stopping or continuing
-                if stop_reason != "max_turns":
-                    logger.info(
-                        "assessment_stopping",
-                        reason="stop_reason_not_max_turns",
-                        stop_reason=stop_reason,
-                        objective_met=objective_met,
-                        internal_turns=internal_turn_count,
-                        auto_continue_enabled=config.auto_continue,
-                    )
-                elif objective_met:
+                # Log segment completion status
+                # Continuable stop reasons (will auto-continue if objective not met)
+                _continuable_reasons = ("max_turns", "end_turn", "unknown")
+                will_continue = (
+                    config.auto_continue
+                    and stop_reason in _continuable_reasons
+                    and not objective_met
+                    and error is None
+                )
+
+                if objective_met:
                     logger.info(
                         "assessment_stopping",
                         reason="objective_met",
@@ -2428,11 +2433,37 @@ Previous attack '{detected_attack}' appears blocked/failed.
                         error=error,
                         internal_turns=internal_turn_count,
                     )
+                elif will_continue:
+                    logger.info(
+                        "assessment_will_continue",
+                        reason="objective_not_met",
+                        stop_reason=stop_reason,
+                        internal_turns=internal_turn_count,
+                        auto_continue_enabled=config.auto_continue,
+                    )
+                else:
+                    logger.info(
+                        "assessment_stopping",
+                        reason=f"terminal_stop_reason_{stop_reason}",
+                        stop_reason=stop_reason,
+                        objective_met=objective_met,
+                        internal_turns=internal_turn_count,
+                        auto_continue_enabled=config.auto_continue,
+                    )
 
-                # Auto-continue loop: if we hit max_turns but objective not met, continue
+                # Auto-continue loop: if agent stopped but objective not met, continue
+                # Stop reasons that should trigger continuation:
+                # - max_turns: hit turn limit, should keep going
+                # - end_turn: model voluntarily stopped (thinks it's done but objective not met)
+                # - unknown: fallback for unrecognized subtypes
+                # Stop reasons that are TERMINAL (don't continue):
+                # - success: objective explicitly marked as met
+                # - error: something went wrong
+                # - error_max_budget: budget exceeded, can't continue
+                continuable_stop_reasons = ("max_turns", "end_turn", "unknown")
                 while (
                     config.auto_continue
-                    and stop_reason == "max_turns"
+                    and stop_reason in continuable_stop_reasons
                     and not objective_met
                     and continuation_count < config.max_continuations
                     and error is None
@@ -2896,12 +2927,17 @@ Respond helpfully while maintaining security assessment context."""
         from inferno.agent.mcp_tools import create_inferno_mcp_server
         inferno_mcp = create_inferno_mcp_server()
 
+        # Set up authentication for Claude Agent SDK
+        from inferno.auth import setup_sdk_auth
+        cli_path = setup_sdk_auth()
+
         options = ClaudeAgentOptions(
             max_turns=50,  # Limited turns for chat
             system_prompt=system_prompt or self._build_chat_system_prompt(config),
             permission_mode="default",
             cwd=str(artifacts_dir),
             mcp_servers={"inferno": inferno_mcp},
+            cli_path=cli_path,  # Use authenticated claude CLI
         )
 
         if config.model:
@@ -3209,6 +3245,10 @@ class MinimalSDKExecutor:
         ) -> PermissionResultAllow:
             return PermissionResultAllow()
 
+        # Set up authentication for Claude Agent SDK
+        from inferno.auth import setup_sdk_auth
+        cli_path = setup_sdk_auth()
+
         # Configure SDK options with minimal settings
         options = ClaudeAgentOptions(
             max_turns=config.max_turns,
@@ -3216,6 +3256,7 @@ class MinimalSDKExecutor:
             permission_mode="bypassPermissions",
             mcp_servers={"inferno-minimal": minimal_mcp},
             can_use_tool=auto_approve_tools,
+            cli_path=cli_path,  # Use authenticated claude CLI
         )
 
         turns = 0
