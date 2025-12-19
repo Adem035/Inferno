@@ -1033,30 +1033,33 @@ class InfernoShell:
             )
 
             # Show loaded prompt components
-            console.print("\n[bold cyan]📋 Loading Prompt Components:[/bold cyan]")
+            console.print("\n[bold cyan]📋 Prompt System:[/bold cyan]")
             if self.ctf_mode:
-                console.print("  [green]✓[/green] CTF Mode Prompt (inline, with bypass techniques)")
+                console.print("  [green]✓[/green] CTF Mode Prompt [dim](bypass techniques, aggressive exploitation)[/dim]")
             else:
-                console.print("  [green]✓[/green] Base System Template")
-                console.print("  [green]✓[/green] cognitive_loop.md")
-                console.print("  [green]✓[/green] human_methodology.md")
-                console.print("  [green]✓[/green] exploitation_escalation.md")
-                console.print("  [green]✓[/green] [bold yellow]creative_exploitation.md[/bold yellow] [dim](bypass techniques, 3-try rule)[/dim]")
-                console.print("  [green]✓[/green] cve_driven.md")
-                console.print("  [green]✓[/green] chaining.md")
-                console.print("  [green]✓[/green] persistence.md")
-                console.print("  [green]✓[/green] so_what_gate.md")
-                console.print(f"  [green]✓[/green] contexts/{self.current_mode}.md")
-                console.print("  [green]✓[/green] [bold yellow]techniques/advanced_attacks.md[/bold yellow] [dim](race conditions, SSTI, smuggling)[/dim]")
+                console.print("  [green]✓[/green] SystemPromptBuilder [dim](dynamic task-specific prompts)[/dim]")
+                console.print("  [green]✓[/green] DynamicPromptGenerator [dim](MITRE ATT&CK mapping, tech-specific payloads)[/dim]")
+            console.print(f"  [green]✓[/green] Context: {self.current_mode} [dim](web/api/network/ctf)[/dim]")
 
             # Show active intelligence features
-            console.print("\n[bold cyan]🧠 Intelligence Features Active:[/bold cyan]")
+            console.print("\n[bold cyan]🧠 Intelligence Features:[/bold cyan]")
             console.print("  [green]✓[/green] HintExtractor [dim](technology fingerprints, CTF hints)[/dim]")
             console.print("  [green]✓[/green] ResponseAnalyzer [dim](WAF detection, bypass suggestions)[/dim]")
             console.print("  [green]✓[/green] DifferentialAnalyzer [dim](blind injection detection)[/dim]")
             console.print("  [green]✓[/green] AttackSelector [dim](prioritized attack vectors)[/dim]")
-            console.print("  [green]✓[/green] AlgorithmLearning [dim](MAB/Q-learning for decisions)[/dim]")
+
+            # Show algorithm and strategy tools
+            console.print("\n[bold cyan]🤖 Algorithm & Strategy Tools:[/bold cyan]")
+            console.print("  [green]✓[/green] [bold yellow]get_strategy[/bold yellow] [dim](Q-Learning recommendations)[/dim]")
+            console.print("  [green]✓[/green] [bold yellow]record_failure[/bold yellow] [dim](blocks pattern after 3 failures)[/dim]")
+            console.print("  [green]✓[/green] [bold yellow]record_success[/bold yellow] [dim](20% penalty if not exploited)[/dim]")
+            console.print("  [green]✓[/green] [bold yellow]get_swarm_plan[/bold yellow] [dim](parallel agent spawning)[/dim]")
+            console.print("  [green]✓[/green] AlgorithmManager [dim](MAB, Bayesian, MCTS, Budget)[/dim]")
+
+            # Show memory integration
+            console.print("\n[bold cyan]💾 Memory & Persistence:[/bold cyan]")
             console.print("  [green]✓[/green] MemoryIntegration [dim](cross-session knowledge transfer)[/dim]")
+            console.print("  [green]✓[/green] SharedContextManager [dim](cross-agent memory sharing)[/dim]")
 
             console.print("\n[bold green]Starting Meta Agent assessment...[/bold green]\n")
 

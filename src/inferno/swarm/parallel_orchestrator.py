@@ -83,7 +83,7 @@ class ParallelTask:
     context: dict[str, Any] = field(default_factory=dict)
     priority: TaskPriority = TaskPriority.NORMAL
     dependency: TaskDependency = TaskDependency.NONE
-    max_turns: int = 25
+    max_turns: int = 100
 
     # Execution tracking
     status: str = "pending"  # pending, running, completed, failed
