@@ -1157,16 +1157,18 @@ _caido_tool_instance = None
 @tool(
     "caido",
     "Interact with Caido web security proxy for traffic inspection and replay. "
-    "Use this when you need to: inspect captured HTTP traffic, replay requests with "
-    "modifications, or search through traffic history using HTTPQL queries. "
-    "Caido must be running locally. Set CAIDO_AUTH_TOKEN env var for authentication.",
+    "Use 'setup' operation at the START of an assessment to auto-authenticate (guest login) "
+    "and create a Caido project - NO TOKEN REQUIRED if Caido has --allow-guests enabled. "
+    "Operations: status, setup, get_requests, get_request, replay, search. "
+    "After setup, route HTTP requests through Caido proxy for traffic capture.",
     {
-        "operation": str,  # status, get_requests, get_request, replay, search
+        "operation": str,  # status, setup, get_requests, get_request, replay, search
         "request_id": str,  # Request ID for get_request and replay operations
         "host_filter": str,  # Filter requests by host
         "httpql": str,  # HTTPQL query (e.g., "req.method.eq:POST", "resp.status.eq:200")
         "limit": int,  # Maximum results (default: 20)
         "modifications": dict,  # Modifications for replay (headers, body, etc.)
+        "assessment_name": str,  # Project name for 'setup' operation
     }
 )
 async def caido_tool(args: dict[str, Any]) -> dict[str, Any]:
@@ -1195,6 +1197,7 @@ async def caido_tool(args: dict[str, Any]) -> dict[str, Any]:
             httpql=args.get("httpql"),
             limit=args.get("limit", 20),
             modifications=args.get("modifications"),
+            assessment_name=args.get("assessment_name"),
         )
 
         if result.success:

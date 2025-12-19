@@ -41,6 +41,7 @@ class CaidoConfig:
     graphql_port: int = 8080  # GraphQL API port (same as proxy by default)
     auth_token: str | None = None
     use_https: bool = False
+    auto_guest_login: bool = True  # Auto-login as guest if no token provided
 
     @property
     def proxy_url(self) -> str:
@@ -63,6 +64,7 @@ class CaidoConfig:
             graphql_port=int(os.getenv("CAIDO_GRAPHQL_PORT", "8080")),
             auth_token=os.getenv("CAIDO_AUTH_TOKEN"),
             use_https=os.getenv("CAIDO_USE_HTTPS", "false").lower() == "true",
+            auto_guest_login=os.getenv("CAIDO_AUTO_GUEST_LOGIN", "true").lower() == "true",
         )
 
 
@@ -120,12 +122,14 @@ class CaidoClient:
     - Query captured requests/responses
     - Replay requests
     - Search traffic using HTTPQL
+    - Auto-login as guest (like Strix does)
     """
 
     def __init__(self, config: CaidoConfig | None = None):
         """Initialize the Caido client."""
         self.config = config or CaidoConfig.from_env()
         self._client: httpx.AsyncClient | None = None
+        self._authenticated: bool = False
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""
@@ -140,16 +144,24 @@ class CaidoClient:
             )
         return self._client
 
+    async def _update_auth_header(self, token: str) -> None:
+        """Update the authorization header with a new token."""
+        self.config.auth_token = token
+        if self._client:
+            self._client.headers["Authorization"] = f"Bearer {token}"
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:
             await self._client.aclose()
             self._client = None
+        self._authenticated = False
 
     async def _execute_query(
         self,
         query: str,
         variables: dict[str, Any] | None = None,
+        skip_auth: bool = False,
     ) -> dict[str, Any]:
         """Execute a GraphQL query."""
         client = await self._get_client()
@@ -164,6 +176,14 @@ class CaidoClient:
             result = response.json()
 
             if "errors" in result:
+                # Check if it's an auth error and we should try guest login
+                errors_str = str(result["errors"])
+                if not skip_auth and self.config.auto_guest_login and not self._authenticated:
+                    if "unauthorized" in errors_str.lower() or "unauthenticated" in errors_str.lower():
+                        logger.info("caido_attempting_guest_login", reason="auth_error")
+                        if await self.login_as_guest():
+                            # Retry the query with new auth
+                            return await self._execute_query(query, variables, skip_auth=True)
                 raise Exception(f"GraphQL errors: {result['errors']}")
 
             return result.get("data", {})
@@ -174,9 +194,238 @@ class CaidoClient:
                 "Make sure Caido is running."
             )
 
-    async def check_connection(self) -> bool:
-        """Check if Caido is accessible."""
+    async def login_as_guest(self) -> bool:
+        """
+        Login as guest to Caido.
+
+        This is how Strix integrates with Caido - it runs Caido with --allow-guests
+        and then uses the loginAsGuest mutation to get an access token automatically.
+
+        Returns:
+            True if login succeeded, False otherwise
+        """
+        mutation = """
+        mutation LoginAsGuest {
+            loginAsGuest {
+                token {
+                    accessToken
+                    refreshToken
+                    expiresAt
+                }
+                error {
+                    ... on OtherUserError {
+                        code
+                    }
+                }
+            }
+        }
+        """
+
         try:
+            client = await self._get_client()
+            response = await client.post(
+                self.config.graphql_url,
+                json={"query": mutation},
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if "errors" in result:
+                logger.warning("caido_guest_login_failed", errors=result["errors"])
+                return False
+
+            data = result.get("data", {}).get("loginAsGuest", {})
+
+            # Check for errors in response
+            if data.get("error"):
+                logger.warning("caido_guest_login_error", error=data["error"])
+                return False
+
+            token_data = data.get("token", {})
+            access_token = token_data.get("accessToken")
+
+            if access_token:
+                await self._update_auth_header(access_token)
+                self._authenticated = True
+                logger.info(
+                    "caido_guest_login_success",
+                    expires_at=token_data.get("expiresAt"),
+                )
+                return True
+            else:
+                logger.warning("caido_guest_login_no_token")
+                return False
+
+        except Exception as e:
+            logger.error("caido_guest_login_exception", error=str(e))
+            return False
+
+    async def ensure_authenticated(self) -> bool:
+        """
+        Ensure we're authenticated to Caido.
+
+        If no token is provided and auto_guest_login is enabled,
+        attempts to login as guest automatically.
+
+        Returns:
+            True if authenticated or auth not required, False if auth failed
+        """
+        # Already authenticated
+        if self._authenticated:
+            return True
+
+        # Have a token configured
+        if self.config.auth_token:
+            self._authenticated = True
+            return True
+
+        # Try guest login if enabled
+        if self.config.auto_guest_login:
+            return await self.login_as_guest()
+
+        return False
+
+    async def create_project(self, name: str) -> str | None:
+        """
+        Create a new project in Caido.
+
+        Args:
+            name: Project name
+
+        Returns:
+            Project ID if created, None otherwise
+        """
+        mutation = """
+        mutation CreateProject($input: CreateProjectInput!) {
+            createProject(input: $input) {
+                project {
+                    id
+                    name
+                }
+                error {
+                    ... on OtherUserError {
+                        code
+                    }
+                }
+            }
+        }
+        """
+
+        try:
+            data = await self._execute_query(mutation, {"input": {"name": name}})
+            result = data.get("createProject", {})
+
+            if result.get("error"):
+                logger.warning("caido_create_project_error", error=result["error"])
+                return None
+
+            project = result.get("project", {})
+            project_id = project.get("id")
+
+            if project_id:
+                logger.info("caido_project_created", project_id=project_id, name=name)
+                return project_id
+            return None
+
+        except Exception as e:
+            logger.error("caido_create_project_failed", error=str(e))
+            return None
+
+    async def select_project(self, project_id: str) -> bool:
+        """
+        Select an existing project in Caido.
+
+        Args:
+            project_id: The project ID to select
+
+        Returns:
+            True if selected, False otherwise
+        """
+        mutation = """
+        mutation SelectProject($id: ID!) {
+            selectProject(id: $id) {
+                project {
+                    id
+                    name
+                }
+            }
+        }
+        """
+
+        try:
+            data = await self._execute_query(mutation, {"id": project_id})
+            result = data.get("selectProject", {})
+            project = result.get("project", {})
+
+            if project.get("id"):
+                logger.info("caido_project_selected", project_id=project_id)
+                return True
+            return False
+
+        except Exception as e:
+            logger.error("caido_select_project_failed", error=str(e))
+            return False
+
+    async def setup_for_assessment(self, assessment_name: str | None = None) -> dict[str, Any]:
+        """
+        Set up Caido for a security assessment.
+
+        This is similar to how Strix sets up Caido:
+        1. Ensure authenticated (guest login if needed)
+        2. Create a project for the assessment
+        3. Select the project
+
+        Args:
+            assessment_name: Optional name for the project (default: timestamp-based)
+
+        Returns:
+            Dict with setup status and details
+        """
+        result = {
+            "success": False,
+            "authenticated": False,
+            "project_id": None,
+            "project_name": None,
+            "proxy_url": self.config.proxy_url,
+        }
+
+        # Step 1: Ensure authenticated
+        if await self.ensure_authenticated():
+            result["authenticated"] = True
+        else:
+            result["error"] = "Failed to authenticate to Caido"
+            return result
+
+        # Step 2: Create project
+        if assessment_name is None:
+            assessment_name = f"inferno-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+
+        project_id = await self.create_project(assessment_name)
+        if project_id:
+            result["project_id"] = project_id
+            result["project_name"] = assessment_name
+
+            # Step 3: Select the project
+            if await self.select_project(project_id):
+                result["success"] = True
+            else:
+                result["error"] = "Failed to select project"
+        else:
+            # Project creation might fail if one already exists, try to continue
+            result["success"] = True
+            result["project_name"] = assessment_name
+            logger.info("caido_project_creation_skipped", reason="may_already_exist")
+
+        return result
+
+    async def check_connection(self) -> bool:
+        """Check if Caido is accessible and authenticate if needed."""
+        try:
+            # First, try to authenticate if needed
+            if not await self.ensure_authenticated():
+                logger.warning("caido_auth_failed")
+                # Continue anyway - some operations might work without auth
+
             query = """
             query Viewer {
                 viewer {
@@ -468,8 +717,11 @@ class CaidoTool(CoreTool):
         "properties": {
             "operation": {
                 "type": "string",
-                "enum": ["status", "get_requests", "get_request", "replay", "search"],
-                "description": "Operation to perform",
+                "enum": ["status", "setup", "get_requests", "get_request", "replay", "search"],
+                "description": (
+                    "Operation to perform. Use 'setup' at the start of an assessment to "
+                    "auto-authenticate (guest login) and create a project."
+                ),
             },
             "request_id": {
                 "type": "string",
@@ -496,11 +748,22 @@ class CaidoTool(CoreTool):
                 "type": "object",
                 "description": "Modifications for replay (headers, body, etc.)",
             },
+            "assessment_name": {
+                "type": "string",
+                "description": "Name for the Caido project (for 'setup' operation)",
+            },
         },
         "required": ["operation"],
     }
 
     examples = [
+        ToolExample(
+            description="Set up Caido for an assessment (auto-login as guest)",
+            input={
+                "operation": "setup",
+                "assessment_name": "pentest-target-2024",
+            },
+        ),
         ToolExample(
             description="Check if Caido is running",
             input={"operation": "status"},
@@ -545,6 +808,7 @@ class CaidoTool(CoreTool):
         httpql: str | None = None,
         limit: int = 20,
         modifications: dict[str, Any] | None = None,
+        assessment_name: str | None = None,
         **kwargs: Any,
     ) -> ToolResult:
         """Execute a Caido operation."""
@@ -559,6 +823,9 @@ class CaidoTool(CoreTool):
         try:
             if operation == "status":
                 return await self._check_status()
+
+            elif operation == "setup":
+                return await self._setup_assessment(assessment_name)
 
             elif operation == "get_requests":
                 return await self._get_requests(
@@ -620,22 +887,75 @@ class CaidoTool(CoreTool):
         is_connected = await self.client.check_connection()
 
         if is_connected:
+            # Build auth status info
+            auth_status = "AUTHENTICATED" if self.client._authenticated else "NOT AUTHENTICATED"
+            auth_method = "guest login" if (self.client._authenticated and self.client.config.auto_guest_login) else "token"
+            if self.client.config.auth_token and not self.client._authenticated:
+                auth_method = "token (configured)"
+
             output = (
                 f"Caido Status: CONNECTED\n"
+                f"Authentication: {auth_status} (via {auth_method})\n"
                 f"Proxy URL: {self.client.config.proxy_url}\n"
                 f"GraphQL API: {self.client.config.graphql_url}\n\n"
                 f"You can route requests through Caido by setting proxy parameter in HTTP tool:\n"
-                f'  http_request(url="...", proxy="{self.client.config.proxy_url}")'
+                f'  http_request(url="...", proxy="{self.client.config.proxy_url}")\n\n'
+                f"TIP: Use 'setup' operation to auto-authenticate and create a project for this assessment."
             )
-            return ToolResult(success=True, output=output)
+            return ToolResult(
+                success=True,
+                output=output,
+                metadata={
+                    "connected": True,
+                    "authenticated": self.client._authenticated,
+                    "proxy_url": self.client.config.proxy_url,
+                    "graphql_url": self.client.config.graphql_url,
+                },
+            )
         else:
             return ToolResult(
                 success=False,
                 output="",
                 error=(
                     f"Cannot connect to Caido at {self.client.config.graphql_url}\n"
-                    "Make sure Caido is running and accessible.\n"
-                    "Set CAIDO_AUTH_TOKEN environment variable if authentication is required."
+                    "Make sure Caido is running and accessible.\n\n"
+                    "To run Caido with guest login enabled (no token required):\n"
+                    "  caido-cli --listen 127.0.0.1:8080 --allow-guests\n\n"
+                    "Or set CAIDO_AUTH_TOKEN environment variable for token auth."
+                ),
+            )
+
+    async def _setup_assessment(self, assessment_name: str | None) -> ToolResult:
+        """Set up Caido for an assessment with auto-auth and project creation."""
+        result = await self.client.setup_for_assessment(assessment_name)
+
+        if result["success"]:
+            output_lines = [
+                "Caido Setup: SUCCESS",
+                f"Authentication: {'GUEST LOGIN' if self.client._authenticated else 'TOKEN'}",
+                f"Project: {result['project_name']}",
+            ]
+            if result["project_id"]:
+                output_lines.append(f"Project ID: {result['project_id']}")
+            output_lines.extend([
+                f"Proxy URL: {result['proxy_url']}",
+                "",
+                "Caido is ready for the assessment. Route HTTP requests through the proxy:",
+                f'  http_request(url="...", proxy="{result["proxy_url"]}")',
+            ])
+            return ToolResult(
+                success=True,
+                output="\n".join(output_lines),
+                metadata=result,
+            )
+        else:
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Caido Setup FAILED: {result.get('error', 'Unknown error')}\n\n"
+                    "Make sure Caido is running with guest login enabled:\n"
+                    "  caido-cli --listen 127.0.0.1:8080 --allow-guests"
                 ),
             )
 
