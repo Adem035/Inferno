@@ -832,6 +832,193 @@ async def swarm_status(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# -------------------------------------------------------------------------
+# Strategy & Scoring Tools - Algorithm-driven decision making
+# -------------------------------------------------------------------------
+
+
+@tool(
+    "get_strategy",
+    "Get AI-powered strategic recommendations using Q-Learning and multi-armed bandits. "
+    "CRITICAL: Use this BEFORE deciding what to do next! Returns ranked actions with Q-values. "
+    "The algorithm learns from your successes and failures to guide optimal attack selection.",
+    {
+        "current_phase": str,  # reconnaissance, scanning, exploitation, post_exploitation, reporting
+        "endpoints_found": int,  # Number of endpoints discovered
+        "vulns_found": int,  # Number of vulnerabilities found
+        "shell_obtained": bool,  # Whether shell access has been obtained
+        "tech_stack": str,  # Comma-separated: "php,mysql,apache"
+    }
+)
+async def get_strategy(args: dict[str, Any]) -> dict[str, Any]:
+    """Get Q-learning based strategic recommendations."""
+    from inferno.tools.strategy import GetStrategyTool
+
+    tool_instance = GetStrategyTool()
+    tech_list = []
+    if args.get("tech_stack"):
+        tech_list = [t.strip() for t in args["tech_stack"].split(",")]
+
+    result = await tool_instance.execute(
+        current_phase=args.get("current_phase", "reconnaissance"),
+        endpoints_found=args.get("endpoints_found", 0),
+        vulns_found=args.get("vulns_found", 0),
+        shell_obtained=args.get("shell_obtained", False),
+        tech_stack=tech_list,
+    )
+
+    return {
+        "content": [{"type": "text", "text": result.output}]
+    }
+
+
+@tool(
+    "record_failure",
+    "Record a FAILED attack attempt to learn from mistakes! "
+    "CRITICAL: Call this EVERY time an attack fails! After 3 consecutive failures, "
+    "that attack pattern is BLOCKED and you must try different approach. "
+    "This feeds the Q-learning algorithm to avoid repeating mistakes.",
+    {
+        "endpoint": str,  # The endpoint tested (URL path)
+        "attack_type": str,  # sqli, xss, ssti, lfi, rfi, ssrf, auth_bypass, rce, xxe, other
+        "reason": str,  # waf_blocked, timeout, 403, no_vuln, rate_limited, etc.
+        "payload": str,  # The payload that was used (optional)
+    }
+)
+async def record_failure(args: dict[str, Any]) -> dict[str, Any]:
+    """Record a failed attack to learn from mistakes."""
+    from inferno.tools.strategy import RecordFailureTool
+
+    tool_instance = RecordFailureTool()
+    result = await tool_instance.execute(
+        endpoint=args.get("endpoint", ""),
+        attack_type=args.get("attack_type", "other"),
+        reason=args.get("reason", "unknown"),
+        payload=args.get("payload"),
+    )
+
+    return {
+        "content": [{"type": "text", "text": result.output}]
+    }
+
+
+@tool(
+    "record_success",
+    "Record a SUCCESSFUL attack to reinforce learning! "
+    "CRITICAL: Call this when a vulnerability is CONFIRMED or EXPLOITED. "
+    "This updates Q-learning weights to favor successful techniques. "
+    "Set exploited=true for FULL POINTS, otherwise you get 20% PENALTY!",
+    {
+        "endpoint": str,  # The vulnerable endpoint
+        "attack_type": str,  # sqli, xss, ssti, lfi, rfi, ssrf, auth_bypass, rce, xxe, other
+        "severity": str,  # critical, high, medium, low, info
+        "exploited": bool,  # TRUE = full points, FALSE = 20% penalty!
+    }
+)
+async def record_success(args: dict[str, Any]) -> dict[str, Any]:
+    """Record a successful attack to reinforce learning."""
+    from inferno.tools.strategy import RecordSuccessTool
+
+    tool_instance = RecordSuccessTool()
+    result = await tool_instance.execute(
+        endpoint=args.get("endpoint", ""),
+        attack_type=args.get("attack_type", "other"),
+        severity=args.get("severity", "medium"),
+        exploited=args.get("exploited", False),
+    )
+
+    # Add explicit scoring feedback
+    exploited = args.get("exploited", False)
+    if not exploited:
+        result_text = result.output + "\n\n⚠️ WARNING: VERIFIED but NOT EXPLOITED = 20% PENALTY!\nSpawn an 'exploiter' worker to get FULL POINTS!"
+    else:
+        result_text = result.output + "\n\n✓ EXPLOITED = FULL POINTS! Well done."
+
+    return {
+        "content": [{"type": "text", "text": result_text}]
+    }
+
+
+@tool(
+    "get_scoring",
+    "Show current scoring with 20% PENALTY calculation for non-exploited findings. "
+    "Use this to understand why you MUST exploit findings, not just detect them!",
+    {
+        "detection_complexity": float,  # DC score (1-10)
+        "exploit_complexity": float,  # EC score (1-10)
+    }
+)
+async def get_scoring(args: dict[str, Any]) -> dict[str, Any]:
+    """Calculate and display scoring with penalty."""
+    dc = args.get("detection_complexity", 5.0)
+    ec = args.get("exploit_complexity", 8.0)
+
+    exploited_score = dc + ec
+    verified_score = dc + (ec * 0.8)
+    penalty = exploited_score - verified_score
+
+    output = f"""## SCORING SYSTEM - 20% Penalty for Non-Exploitation
+
+### Your Finding Scores (DC={dc}, EC={ec})
+
+| Status | Formula | Score |
+|--------|---------|-------|
+| **EXPLOITED** | TC = DC + EC | **{exploited_score:.1f}** ✓ |
+| VERIFIED | TC = DC + EC×0.8 | {verified_score:.1f} |
+
+**You lose {penalty:.1f} points if you don't exploit!**
+
+### How to Get Full Points
+1. Don't just DETECT vulnerabilities - EXPLOIT them!
+2. Spawn `exploiter` workers for each finding
+3. Achieve actual impact: data extraction, RCE, auth bypass
+
+### Action Required
+```
+swarm(agent_type="exploiter", task="Fully exploit [your finding]", background=true)
+```
+
+Remember: Verified-only findings are PENALIZED 20%!"""
+
+    return {
+        "content": [{"type": "text", "text": output}]
+    }
+
+
+@tool(
+    "get_swarm_plan",
+    "Generate a comprehensive plan for spawning MULTIPLE sub-agents in PARALLEL! "
+    "Use this when you have multiple endpoints, vulns, or targets to test. "
+    "Returns executable swarm commands - COPY AND EXECUTE THEM!",
+    {
+        "endpoints": str,  # Comma-separated: "/login,/api/users,/search"
+        "vulns_to_exploit": str,  # Comma-separated: "SQLi in /search,XSS in /comment"
+        "subdomains": str,  # Comma-separated: "api.target.com,admin.target.com"
+        "max_parallel": int,  # Max parallel agents (default 5)
+    }
+)
+async def get_swarm_plan(args: dict[str, Any]) -> dict[str, Any]:
+    """Generate parallel swarm execution plan."""
+    from inferno.tools.strategy import GetSwarmPlanTool
+
+    # Parse comma-separated strings to lists
+    endpoints = [e.strip() for e in args.get("endpoints", "").split(",") if e.strip()]
+    vulns = [v.strip() for v in args.get("vulns_to_exploit", "").split(",") if v.strip()]
+    subdomains = [s.strip() for s in args.get("subdomains", "").split(",") if s.strip()]
+
+    tool_instance = GetSwarmPlanTool()
+    result = await tool_instance.execute(
+        endpoints=endpoints,
+        vulns_to_exploit=vulns,
+        subdomains=subdomains,
+        max_parallel=args.get("max_parallel", 5),
+    )
+
+    return {
+        "content": [{"type": "text", "text": result.output}]
+    }
+
+
 @tool(
     "nvd_lookup",
     "Query NVD for known CVEs when you detect ANY software version. "
@@ -1110,6 +1297,12 @@ def create_inferno_mcp_server():
         name="inferno",
         version="1.0.0",
         tools=[
+            # Strategy & Algorithm Tools (Q-Learning, Bandits, 20% Penalty)
+            get_strategy,
+            record_failure,
+            record_success,
+            get_scoring,
+            get_swarm_plan,
             # Memory tools
             memory_store,
             memory_search,
@@ -1128,6 +1321,7 @@ def create_inferno_mcp_server():
             get_metrics,
             # Swarm - spawn subagents (META-AGENT PATTERN)
             swarm_spawn,
+            swarm_status,
             # Swarm/meta-tool registration (metrics only)
             register_swarm,
             register_meta_tool,

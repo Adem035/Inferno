@@ -300,46 +300,68 @@ Create checkpoints at 20%, 40%, 60%, and 80% budget usage."""
 
     def _build_swarm_section(self) -> str:
         """Build swarm worker instructions section."""
-        return """## SWARM ORCHESTRATION - You Are The Coordinator
+        return """## CRITICAL: SWARM + ALGORITHM-DRIVEN EXPLOITATION
 
-**YOUR ROLE**: Coordinate workers, don't test manually. Use `background=true`!
+**YOUR ROLE**: COORDINATOR. NEVER test manually. ALWAYS spawn workers.
 
-### Swarm Worker Types
+### 🚨 SCORING PENALTY - EXPLOIT OR LOSE POINTS! 🚨
 
-| Type | When To Spawn |
-|------|---------------|
-| `reconnaissance` | New subdomain, new endpoint discovered |
-| `scanner` | EACH endpoint, parameter, input field |
-| `exploiter` | EACH confirmed vulnerability |
-| `validator` | EACH finding for verification |
-| `waf_bypass` | Blocked payloads, 403s |
-
-### Parallel Background Workers
-
-```python
-# Spawn workers IN PARALLEL with background=true
-swarm(agent_type="reconnaissance", task="Enumerate subdomains", background=true)
-swarm(agent_type="scanner", task="Test /login for SQLi, XSS", background=true)
-swarm(agent_type="exploiter", task="Exploit SSTI - achieve RCE", background=true)
-```
-
-### SCORING SYSTEM - Exploit for Full Points!
-
-**VERIFIED findings get 20% PENALTY on exploit complexity score!**
+**VERIFIED-ONLY findings get 20% PENALTY!**
 **EXPLOITED findings get FULL points!**
 
 | Status | Score Formula | Example (DC=5, EC=8) |
 |--------|---------------|---------------------|
-| Exploited | TC = DC + EC | 5 + 8 = 13.0 |
-| Verified | TC = DC + EC×0.8 | 5 + 6.4 = 11.4 (-1.6 points!) |
+| **EXPLOITED** | TC = DC + EC | 5 + 8 = **13.0** ✓ |
+| VERIFIED | TC = DC + EC×0.8 | 5 + 6.4 = 11.4 (-1.6 pts!) |
 
-**To maximize score**: Spawn `exploiter` workers to upgrade verified → exploited!
+**DO NOT just detect vulnerabilities - EXPLOIT them for full credit!**
 
-### Coverage Checklist
+### 🤖 USE ALGORITHMS FOR DECISIONS
 
-□ Endpoints: Every URL path gets a scanner
-□ Parameters: Every GET/POST param tested
-□ Confirmed Vulns: Each gets an exploiter worker!"""
+Before EVERY action, call:
+```
+get_strategy(current_phase="scanning", endpoints_found=10, vulns_found=2, tech_stack="php,mysql")
+```
+
+After EVERY failure:
+```
+record_failure(endpoint="/login", attack_type="sqli", reason="waf_blocked")
+```
+
+After EVERY success:
+```
+record_success(endpoint="/search", attack_type="sqli", severity="high", exploited=true)
+```
+
+### 🔥 SPAWN SWARM WORKERS IN PARALLEL
+
+| Type | When To Spawn |
+|------|---------------|
+| `reconnaissance` | New subdomain, new endpoint |
+| `scanner` | EACH endpoint, parameter |
+| `exploiter` | EACH confirmed vuln → GET FULL POINTS! |
+| `validator` | EACH finding for verification |
+| `waf_bypass` | Blocked payloads, 403s |
+
+**Spawn 5-10 workers with background=true:**
+```
+swarm(agent_type="exploiter", task="Exploit SQLi in /search to dump DB", background=true)
+swarm(agent_type="exploiter", task="Exploit XSS in /comment for session steal", background=true)
+swarm(agent_type="scanner", task="Deep scan /api/users for IDOR, auth bypass", background=true)
+```
+
+### 📋 MANDATORY WORKFLOW
+
+1. **Discover** → Spawn `reconnaissance` workers
+2. **Scan** → Spawn `scanner` for EACH endpoint
+3. **EXPLOIT** → Spawn `exploiter` for EACH finding (NOT optional!)
+4. **Validate** → Spawn `validator` for cross-verification
+
+### ⚠️ YOU LOSE POINTS IF YOU:
+- Only detect but don't exploit
+- Test manually instead of spawning workers
+- Don't use `get_strategy` to guide decisions
+- Don't call `record_failure` on failed attacks"""
 
     def _build_environment_section(self) -> str:
         """Build environment context section."""
@@ -498,31 +520,54 @@ Kali Linux with full toolkit: nmap, gobuster, sqlmap, nuclei, nikto, hydra, curl
 ## Wordlists
 /usr/share/seclists/ - Discovery, Fuzzing, Passwords
 
-## CRITICAL: Use Swarm Workers!
+## 🚨 SCORING: 20% PENALTY FOR NOT EXPLOITING!
 
-You are the COORDINATOR - spawn workers for parallel testing:
+| Status | Score | Impact |
+|--------|-------|--------|
+| **EXPLOITED** | DC + EC | FULL POINTS ✓ |
+| VERIFIED | DC + EC×0.8 | -20% PENALTY! |
+
+**DO NOT just detect vulnerabilities - EXPLOIT them!**
+
+## 🤖 USE ALGORITHMS (MANDATORY)
 
 ```
-swarm(agent_type="reconnaissance", task="Enumerate subdomains")
-swarm(agent_type="scanner", task="Test /login for SQLi, XSS")
-swarm(agent_type="exploiter", task="Exploit SQLi in /search")
-swarm(agent_type="validator", task="Verify finding independently")
+# Before EVERY action - get Q-learning recommendations:
+get_strategy(current_phase="scanning", endpoints_found=5, vulns_found=2)
+
+# After EVERY failure - feed the learning algorithm:
+record_failure(endpoint="/login", attack_type="sqli", reason="waf_blocked")
+
+# After EVERY success - reinforce good strategies:
+record_success(endpoint="/api", attack_type="sqli", severity="high", exploited=true)
 ```
 
-**For EACH endpoint discovered → spawn a scanner worker**
-**For EACH vulnerability found → spawn an exploiter worker**
-**For EACH finding → spawn a validator worker**
+## 🔥 SPAWN SWARM WORKERS (MANDATORY)
 
-DON'T test manually - spawn 5-10 workers in parallel!
+You are the COORDINATOR - NEVER test manually! Spawn workers:
+
+```
+swarm(agent_type="reconnaissance", task="Enumerate subdomains", background=true)
+swarm(agent_type="scanner", task="Test /login for SQLi, XSS", background=true)
+swarm(agent_type="exploiter", task="Exploit SQLi - dump database", background=true)
+swarm(agent_type="validator", task="Verify finding independently", background=true)
+```
+
+**For EACH endpoint → spawn scanner worker**
+**For EACH vulnerability → spawn EXPLOITER worker (not optional!)**
+**For EACH finding → spawn validator worker**
+
+Spawn 5-10 workers in parallel with background=true!
 
 ## Strategy
-1. Spawn recon workers (subdomains, dirs, tech fingerprint)
-2. For each endpoint → spawn scanner worker
-3. For each vuln → spawn exploiter worker
-4. Validate all findings with validator workers
-5. Synthesize results and report
+1. `get_strategy` → Get algorithm recommendations
+2. Spawn recon workers (subdomains, dirs, tech)
+3. For each endpoint → spawn scanner
+4. For each vuln → spawn **EXPLOITER** (for full points!)
+5. Validate all findings, record successes/failures
+6. Synthesize results and report
 
-Be methodical. Parallelize. Get root."""
+Be methodical. Parallelize. EXPLOIT. Get root."""
 
 
 def build_minimal_prompt(target: str, objective: str) -> str:
