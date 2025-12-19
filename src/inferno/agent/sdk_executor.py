@@ -342,6 +342,17 @@ class SDKAgentExecutor:
         self._last_finding_turn: int = 0
         self._findings_count: int = 0
 
+        # Swarm enforcement tracking
+        self._manual_tool_calls: int = 0  # Count of http_request/execute_command since last swarm
+        self._swarm_spawns: int = 0  # Total swarm spawns this session
+        self._last_swarm_reminder_turn: int = 0  # Avoid spamming reminders
+
+        # Algorithm enforcement tracking
+        self._tool_calls_since_strategy: int = 0  # Calls since last get_strategy
+        self._tool_calls_since_think: int = 0  # Calls since last think
+        self._failed_attacks_not_recorded: int = 0  # Failures without record_failure
+        self._last_algorithm_reminder_turn: int = 0
+
         # Current attack category tracking (for diminishing returns)
         self._current_category: str = "reconnaissance"
         self._last_tool_category_map: dict[str, str] = {
@@ -778,6 +789,181 @@ swarm(agent_type="exploiter", task="Exploit the {verified_only[0].vuln_type} - e
             potential_gain=total_penalty,
         )
         return feedback
+
+    def _check_and_inject_swarm_reminder(self, current_turn: int, tool_name: str) -> str | None:
+        """
+        Enforce swarm usage by detecting manual work and injecting reminders.
+
+        This tracks how many manual tool calls (http_request, execute_command, etc.)
+        happen without spawning workers. If the agent is doing too much manual work,
+        inject a reminder to spawn workers instead.
+
+        Returns a prompt nudging the agent to use swarm workers.
+        """
+        # Track manual tool calls (testing tools, not utility tools)
+        manual_tools = {"http_request", "execute_command", "generic_linux_command"}
+        swarm_tools = {"swarm", "spawn_worker"}
+
+        if tool_name in swarm_tools:
+            # Reset counter when swarm is used
+            self._manual_tool_calls = 0
+            self._swarm_spawns += 1
+            return None
+
+        if tool_name in manual_tools:
+            self._manual_tool_calls += 1
+
+        # Trigger reminder after 5 manual tool calls without swarm
+        # And don't spam (at least 5 turns between reminders)
+        if self._manual_tool_calls >= 5 and (current_turn - self._last_swarm_reminder_turn >= 5):
+            self._last_swarm_reminder_turn = current_turn
+
+            reminder = f"""
+## ⚠️ SWARM ENFORCEMENT REMINDER
+
+You've made **{self._manual_tool_calls} manual tool calls** without spawning any workers.
+
+**YOU ARE THE COORDINATOR - NOT THE TESTER!**
+
+Your role is to:
+1. Analyze the situation with `think()`
+2. Get strategy with `get_strategy()`
+3. **SPAWN WORKERS** to do the actual testing
+
+### Instead of manual testing:
+```
+# DON'T DO THIS:
+http_request(url="...", method="POST", body={{"username": "admin", "password": "test"}})
+
+# DO THIS INSTEAD:
+swarm(agent_type="scanner", task="Test /login for auth bypass, SQLi, brute force", background=true)
+swarm(agent_type="exploiter", task="Exploit any auth vulns found in /login", background=true)
+```
+
+### Worker types available:
+- `reconnaissance`: Discovery, enumeration, fingerprinting
+- `scanner`: Vulnerability scanning per endpoint
+- `exploiter`: Full exploitation of findings
+- `validator`: Independent verification
+- `waf_bypass`: Bypass filters and WAF
+
+**Spawn 3-5 workers NOW with background=true!**
+
+Session stats: {self._swarm_spawns} workers spawned, {self._manual_tool_calls} manual calls
+"""
+            logger.info(
+                "swarm_reminder_injected",
+                turn=current_turn,
+                manual_calls=self._manual_tool_calls,
+                swarm_spawns=self._swarm_spawns,
+            )
+            return reminder
+
+        return None
+
+    def _check_and_inject_algorithm_reminder(self, current_turn: int, tool_name: str, is_error: bool) -> str | None:
+        """
+        Enforce algorithm tool usage by detecting when agents skip them.
+
+        Tracks:
+        - Tool calls without get_strategy() - should call strategy before attacks
+        - Tool calls without think() - should reason before complex decisions
+        - Failed attacks without record_failure() - must record all outcomes
+
+        Returns a prompt reminding the agent to use algorithms.
+        """
+        # Strategy tools that reset counters
+        strategy_tools = {"get_strategy", "mcp__inferno__get_strategy"}
+        think_tools = {"think", "mcp__inferno__think"}
+        record_tools = {"record_failure", "record_success", "mcp__inferno__record_failure", "mcp__inferno__record_success"}
+        attack_tools = {"http_request", "execute_command", "generic_linux_command", "swarm"}
+
+        # Reset counters when strategy tools are used
+        if tool_name in strategy_tools:
+            self._tool_calls_since_strategy = 0
+            return None
+
+        if tool_name in think_tools:
+            self._tool_calls_since_think = 0
+            return None
+
+        if tool_name in record_tools:
+            self._failed_attacks_not_recorded = 0
+            return None
+
+        # Track attack tool usage
+        if tool_name in attack_tools:
+            self._tool_calls_since_strategy += 1
+            self._tool_calls_since_think += 1
+
+        # Track failures not recorded
+        if is_error and tool_name in attack_tools:
+            self._failed_attacks_not_recorded += 1
+
+        # Check if reminder needed (at least 5 turns between reminders)
+        if current_turn - self._last_algorithm_reminder_turn < 5:
+            return None
+
+        issues = []
+
+        # Check for missing strategy calls
+        if self._tool_calls_since_strategy >= 5:
+            issues.append(f"- **{self._tool_calls_since_strategy} tool calls** without calling `get_strategy()`")
+
+        # Check for missing think calls
+        if self._tool_calls_since_think >= 8:
+            issues.append(f"- **{self._tool_calls_since_think} tool calls** without using `think()` for reasoning")
+
+        # Check for unrecorded failures
+        if self._failed_attacks_not_recorded >= 3:
+            issues.append(f"- **{self._failed_attacks_not_recorded} failed attacks** not recorded with `record_failure()`")
+
+        if not issues:
+            return None
+
+        self._last_algorithm_reminder_turn = current_turn
+
+        reminder = f"""
+## 🤖 ALGORITHM WORKFLOW REMINDER
+
+You're not following the mandatory algorithm workflow:
+
+{chr(10).join(issues)}
+
+### REQUIRED WORKFLOW:
+
+**1. THINK FIRST** (before complex decisions):
+```
+think(thought="Analyzing the error - it reveals MySQL. Should use MySQL payloads.", thought_type="analysis")
+```
+
+**2. GET STRATEGY** (before choosing attacks):
+```
+get_strategy(current_phase="exploitation", endpoints_found=5, vulns_found=1)
+```
+
+**3. RECORD ALL OUTCOMES** (after every attack):
+```
+record_failure(endpoint="/login", attack_type="sqli", reason="WAF blocked")
+# OR
+record_success(endpoint="/api", attack_type="sqli", severity="high", exploited=true)
+```
+
+The algorithm LEARNS from your outcomes. Skipping these calls means:
+- No Q-learning optimization of attack order
+- No failure pattern blocking
+- Repeated failed approaches
+
+**Use the algorithm tools NOW!**
+"""
+        logger.info(
+            "algorithm_reminder_injected",
+            turn=current_turn,
+            calls_since_strategy=self._tool_calls_since_strategy,
+            calls_since_think=self._tool_calls_since_think,
+            unrecorded_failures=self._failed_attacks_not_recorded,
+        )
+        return reminder
 
     def _build_system_prompt(self, config: AssessmentConfig, artifacts_dir: Path) -> str:
         """Build the system prompt for the assessment using SystemPromptBuilder."""
@@ -2106,6 +2292,24 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
 
                                 if self._on_tool_result:
                                     self._on_tool_result(tool_name, output, is_error)
+
+                                # ============================================================
+                                # SWARM ENFORCEMENT: Remind agent to spawn workers
+                                # ============================================================
+                                swarm_reminder = self._check_and_inject_swarm_reminder(
+                                    internal_turn_count, tool_name
+                                )
+                                if swarm_reminder and self._on_message:
+                                    self._on_message(swarm_reminder)
+
+                                # ============================================================
+                                # ALGORITHM ENFORCEMENT: Remind agent to use strategy tools
+                                # ============================================================
+                                algo_reminder = self._check_and_inject_algorithm_reminder(
+                                    internal_turn_count, tool_name, is_error
+                                )
+                                if algo_reminder and self._on_message:
+                                    self._on_message(algo_reminder)
 
                                 # ============================================================
                                 # HINT EXTRACTION: Populate _detected_technologies and hints
