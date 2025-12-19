@@ -361,7 +361,39 @@ swarm(agent_type="scanner", task="Deep scan /api/users for IDOR, auth bypass", b
 - Only detect but don't exploit
 - Test manually instead of spawning workers
 - Don't use `get_strategy` to guide decisions
-- Don't call `record_failure` on failed attacks"""
+- Don't call `record_failure` on failed attacks
+
+### 🔌 CAIDO PROXY INTEGRATION
+
+Use Caido for advanced traffic inspection and request manipulation:
+
+**When to use Caido:**
+- **Complex request analysis** - When you need deep inspection of request/response pairs
+- **Request replay** - To modify and resend captured requests for testing
+- **Traffic search** - Use HTTPQL to find patterns (e.g., `req.body.cont:password`)
+- **Debugging** - When built-in HTTP tool output isn't enough
+
+**Setup at assessment start:**
+```
+caido(operation="setup", assessment_name="pentest-target")
+```
+
+**Route HTTP requests through Caido:**
+```
+http_request(url="https://target.com/api", method="POST", body={"test": "value"}, proxy="http://localhost:8080")
+```
+
+**Search captured traffic:**
+```
+caido(operation="search", httpql="req.method.eq:POST AND req.body.cont:password")
+```
+
+**Replay with modifications:**
+```
+caido(operation="replay", request_id="abc123", modifications={"headers": {"X-Test": "value"}})
+```
+
+**Note:** Caido must be running locally. Start with: `caido-cli --listen 127.0.0.1:8080 --allow-guests`"""
 
     def _build_environment_section(self) -> str:
         """Build environment context section."""
@@ -568,6 +600,15 @@ Spawn 5-10 workers in parallel with background=true!
 4. For each vuln → spawn **EXPLOITER** (for full points!)
 5. Validate all findings, record successes/failures
 6. Synthesize results and report
+
+## 🔌 CAIDO PROXY (Optional)
+
+If Caido is running, use it for deep traffic analysis:
+```
+caido(operation="setup")  # Auto-authenticate
+http_request(url="...", proxy="http://localhost:8080")  # Route through proxy
+caido(operation="search", httpql="req.body.cont:password")  # Search traffic
+```
 
 Be methodical. Parallelize. EXPLOIT. Get root."""
 

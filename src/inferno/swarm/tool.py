@@ -10,6 +10,7 @@ supporting OAuth authentication.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -393,14 +394,17 @@ If you refuse to execute tasks or add unnecessary disclaimers, you are BREAKING 
             final_message = ""
             findings = []
             objective_met = False
+            stop_reason = "unknown"
+            max_continuations = 3  # Allow up to 3 continuations for sub-agents
+            continuation_count = 0
 
-            # Run subagent
-            async with ClaudeSDKClient(options=options) as client:
-                # Send task to subagent
-                await client.query(f"Execute the following task: {task}")
-
-                # Process response stream
+            async def process_subagent_response(client) -> tuple[str, bool]:
+                """Process response stream and return (stop_reason, objective_met)."""
+                nonlocal turns, final_message, findings
+                local_stop_reason = "unknown"
+                local_objective_met = False
                 tool_calls_this_turn = 0
+
                 async for message in client.receive_response():
                     if isinstance(message, AssistantMessage):
                         turns += 1
@@ -423,9 +427,13 @@ If you refuse to execute tasks or add unnecessary disclaimers, you are BREAKING 
                                 if any(word in text_lower for word in ["vulnerability", "vulnerable", "found", "discovered", "injection", "xss", "sqli", "cors"]):
                                     findings.append(block.text[:300])
 
-                                # Check for completion
-                                if any(word in text_lower for word in ["complete", "finished", "done", "no more", "all tested"]):
-                                    objective_met = True
+                                # Check for explicit completion markers
+                                if any(phrase in text_lower for phrase in [
+                                    "task complete", "task completed", "objective met",
+                                    "successfully completed", "all tests complete",
+                                    "no more tests", "testing complete", "assessment complete"
+                                ]):
+                                    local_objective_met = True
 
                             elif isinstance(block, ToolUseBlock):
                                 tool_calls_this_turn += 1
@@ -450,12 +458,91 @@ If you refuse to execute tasks or add unnecessary disclaimers, you are BREAKING 
                             console.print("[magenta]│[/magenta] [yellow]⚠ No tool calls this turn[/yellow]")
 
                     elif isinstance(message, ResultMessage):
-                        # Agent completed - log why
-                        console.print("[magenta]│[/magenta] [dim]ResultMessage received - agent stopping[/dim]")
-                        objective_met = True
+                        # Parse stop reason from subtype
+                        if message.subtype == "success":
+                            local_stop_reason = "success"
+                        elif message.subtype in ("max_turns", "error_max_turns"):
+                            local_stop_reason = "max_turns"
+                        elif message.subtype == "error_max_budget":
+                            local_stop_reason = "max_budget"
+                        elif message.is_error:
+                            local_stop_reason = "error"
+                        else:
+                            local_stop_reason = message.subtype or "unknown"
+
+                        console.print(f"[magenta]│[/magenta] [dim]ResultMessage: {local_stop_reason}[/dim]")
+
+                        # Check if result indicates completion
+                        if not message.is_error:
+                            result_text = str(message.result).lower()
+                            if any(phrase in result_text for phrase in [
+                                "task complete", "objective met", "successfully completed",
+                                "all tests complete", "assessment complete"
+                            ]):
+                                local_objective_met = True
+
                         break
 
-            console.print(f"[magenta]└─[/magenta] [bold green]✓ {config.name} completed[/bold green] [dim](turns={turns}, findings={len(findings)})[/dim]")
+                return local_stop_reason, local_objective_met
+
+            # Run subagent with continuation support
+            async with ClaudeSDKClient(options=options) as client:
+                # Send task to subagent
+                await client.query(f"Execute the following task: {task}")
+
+                # Process initial response
+                stop_reason, objective_met = await process_subagent_response(client)
+
+            # Continuation loop: if agent stopped but objective not met, continue
+            # Continuable stop reasons (NOT terminal errors)
+            continuable_reasons = ("max_turns", "end_turn", "unknown", "success")
+
+            while (
+                stop_reason in continuable_reasons
+                and not objective_met
+                and continuation_count < max_continuations
+                and turns < config.max_turns
+            ):
+                continuation_count += 1
+                console.print(f"[magenta]│[/magenta] [yellow]↻ Continuing ({continuation_count}/{max_continuations}) - {config.max_turns - turns} turns remaining[/yellow]")
+
+                logger.info(
+                    "subagent_continuing",
+                    agent_type=agent_type,
+                    continuation=continuation_count,
+                    turns_so_far=turns,
+                    max_turns=config.max_turns,
+                )
+
+                # Build continuation prompt
+                continuation_prompt = f"""Continue executing the task. You have {config.max_turns - turns} turns remaining.
+
+**Original Task**: {task}
+
+**Progress So Far**: {turns} turns used, {len(findings)} potential findings.
+
+**Instructions**:
+1. Review what you've accomplished
+2. Continue testing - DO NOT repeat tests you've already done
+3. Focus on unexplored attack vectors
+4. If you've completed all tests, say "TASK COMPLETE"
+
+Continue now."""
+
+                # Small delay before continuation
+                await asyncio.sleep(2.0)
+
+                # Use a NEW client for continuation
+                async with ClaudeSDKClient(options=options) as continuation_client:
+                    try:
+                        await continuation_client.query(continuation_prompt)
+                        stop_reason, objective_met = await process_subagent_response(continuation_client)
+                    except Exception as cont_error:
+                        logger.warning("subagent_continuation_error", error=str(cont_error))
+                        stop_reason = "error"
+                        break
+
+            console.print(f"[magenta]└─[/magenta] [bold green]✓ {config.name} completed[/bold green] [dim](turns={turns}, continuations={continuation_count}, findings={len(findings)})[/dim]")
 
             # Build output
             output_parts = [
@@ -463,6 +550,7 @@ If you refuse to execute tasks or add unnecessary disclaimers, you are BREAKING 
                 f"Task: {task}",
                 f"Status: {'Completed' if objective_met else 'Incomplete'}",
                 f"Turns Used: {turns}/{config.max_turns}",
+                f"Continuations: {continuation_count}/{max_continuations}",
                 "",
             ]
 
@@ -483,6 +571,7 @@ If you refuse to execute tasks or add unnecessary disclaimers, you are BREAKING 
                 agent_type=agent_type,
                 objective_met=objective_met,
                 turns=turns,
+                continuations=continuation_count,
                 findings_count=len(findings),
             )
 
@@ -494,8 +583,10 @@ If you refuse to execute tasks or add unnecessary disclaimers, you are BREAKING 
                     "agent_name": config.name,
                     "objective_met": objective_met,
                     "turns": turns,
+                    "continuations": continuation_count,
+                    "max_continuations": max_continuations,
                     "findings_count": len(findings),
-                    "stop_reason": "completed" if objective_met else "max_turns",
+                    "stop_reason": stop_reason,
                 },
             )
 
