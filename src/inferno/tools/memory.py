@@ -1128,7 +1128,9 @@ class MemoryTool(HybridTool):
                         "hypothesis", "todo", "dead_end", "interesting", "identifier",
                         # Pentester-focused types
                         "credential", "attack_chain", "foothold", "defense",
-                        "payload", "enumeration", "evidence", "false_positive"
+                        "payload", "enumeration", "evidence", "false_positive",
+                        # Cross-session learning
+                        "assessment_score"
                     ],
                     "description": "Type of memory for categorization.",
                     "default": "findings",

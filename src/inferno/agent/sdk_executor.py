@@ -3019,16 +3019,24 @@ Continue the assessment now. Start by recalling memories.""")
             if self._attack_selector and self._detected_hints:
                 for hint in self._detected_hints[-10:]:  # Last 10 hints
                     try:
-                        # Boost attack priorities based on hints
-                        from inferno.core.hint_extractor import Hint, HintType, HintPriority
-                        hint_obj = Hint(
-                            hint_type=HintType(hint['type']) if hint['type'] in [e.value for e in HintType] else HintType.OTHER,
-                            content=hint['content'],
-                            priority=HintPriority(hint['priority'].lower()) if hint['priority'].lower() in [e.value for e in HintPriority] else HintPriority.MEDIUM,
+                        # Extract attack type from hint content
+                        hint_content = hint.get('content', '')
+                        hint_type = hint.get('type', 'unknown')
+                        hint_priority = hint.get('priority', 'medium').lower()
+
+                        # Determine boost amount based on priority
+                        boost_amount = 0.2 if hint_priority == 'critical' else (
+                            0.15 if hint_priority == 'high' else 0.1
                         )
-                        self._attack_selector.boost_attack_priority(hint_obj)
-                    except Exception:
-                        pass  # Skip invalid hints
+
+                        # Boost attack priority using correct method signature
+                        self._attack_selector.boost_attack_priority(
+                            attack_type=hint_content[:50],  # Use hint content as attack type
+                            boost=boost_amount,
+                            reason=f"Hint extracted ({hint_type}): {hint_content[:100]}"
+                        )
+                    except Exception as e:
+                        logger.debug("hint_boost_failed", hint=hint, error=str(e))
 
     async def _persist_assessment_score_to_memory(
         self,
@@ -3146,7 +3154,7 @@ Continue the assessment now. Start by recalling memories.""")
 
             # Record each finding as a learning outcome
             for finding_score in score.finding_scores:
-                vuln_type = finding_score.vulnerability_type or "unknown"
+                vuln_type = finding_score.vuln_type or "unknown"
                 was_exploited = (
                     finding_score.technical_complexity.exploitation_status.value == "exploited"
                 )

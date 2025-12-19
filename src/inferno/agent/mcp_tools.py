@@ -700,13 +700,16 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
                             findings_count = output_lower.count('finding') + output_lower.count('vulnerability')
                         if 'flag' in output_lower:
                             findings_count += output_lower.count('flag{')
+                    # Estimate tokens: ~4 chars per token, assume output reflects usage
+                    estimated_tokens = len(result.output or '') // 4 if result.output else 0
                     loop_integration.record_spawn_outcome(
                         success=result.success,
                         findings_count=findings_count,
-                        turns_used=max_turns,  # Approximate
+                        turns_used=max_turns,
+                        tokens_used=estimated_tokens,
                     )
                 except Exception as e:
-                    logger.debug("spawn_outcome_recording_failed", error=str(e))
+                    logger.warning("spawn_outcome_recording_failed", error=str(e))
 
             return {
                 "success": result.success,
@@ -723,6 +726,7 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
                         success=False,
                         findings_count=0,
                         turns_used=0,
+                        tokens_used=0,
                     )
                 except Exception:
                     pass
@@ -774,13 +778,16 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
                         findings_count = output_lower.count('finding') + output_lower.count('vulnerability')
                     if 'flag' in output_lower:
                         findings_count += output_lower.count('flag{')
+                # Estimate tokens: ~4 chars per token
+                estimated_tokens = len(result.output or '') // 4 if result.output else 0
                 loop_integration.record_spawn_outcome(
                     success=result.success,
                     findings_count=findings_count,
                     turns_used=max_turns,
+                    tokens_used=estimated_tokens,
                 )
             except Exception as e:
-                logger.debug("spawn_outcome_recording_failed", error=str(e))
+                logger.warning("spawn_outcome_recording_failed", error=str(e))
 
         if result.success:
             return {
@@ -807,6 +814,7 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
                     success=False,
                     findings_count=0,
                     turns_used=0,
+                    tokens_used=0,
                 )
             except Exception:
                 pass
