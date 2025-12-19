@@ -3,7 +3,7 @@ Configuration profiles for different assessment scenarios.
 
 Supports:
 - Bug bounty program presets (HackerOne, Bugcrowd)
-- Assessment modes (web, network, ctf)
+- Assessment modes (web, network, cloud)
 - Custom user profiles
 """
 
@@ -25,9 +25,8 @@ class AssessmentProfile:
 
     name: str
     description: str = ""
-    mode: str = "web"  # web, network, ctf, cloud, api
+    mode: str = "web"  # web, network, cloud, api
     max_turns: int = 500
-    ctf_mode: bool = False
     persona: str = "thorough"
     auto_continue: bool = True
     max_continuations: int = 5
@@ -51,7 +50,6 @@ class AssessmentProfile:
             "description": self.description,
             "mode": self.mode,
             "max_turns": self.max_turns,
-            "ctf_mode": self.ctf_mode,
             "persona": self.persona,
             "auto_continue": self.auto_continue,
             "max_continuations": self.max_continuations,
@@ -73,7 +71,6 @@ class AssessmentProfile:
             description=data.get("description", ""),
             mode=data.get("mode", "web"),
             max_turns=data.get("max_turns", 500),
-            ctf_mode=data.get("ctf_mode", False),
             persona=data.get("persona", "thorough"),
             auto_continue=data.get("auto_continue", True),
             max_continuations=data.get("max_continuations", 5),
@@ -129,22 +126,6 @@ class ProfileManager:
                 ],
                 rate_limit_rpm=60,
                 program_type="bugcrowd",
-            ),
-            "ctf-speed": AssessmentProfile(
-                name="ctf-speed",
-                description="Fast CTF solving mode",
-                mode="ctf",
-                max_turns=100,
-                ctf_mode=True,
-                persona="ctf",
-                auto_continue=True,
-                max_continuations=3,
-                aggressive=True,
-                rules=[
-                    "Focus on flag capture",
-                    "Try common CTF techniques first",
-                    "Check for hidden files and directories",
-                ],
             ),
             "pentest-stealth": AssessmentProfile(
                 name="pentest-stealth",

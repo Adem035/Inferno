@@ -1735,7 +1735,6 @@ class InfernoRunner(Runner):
         run_config: RunConfig | None = None,
         target: str | None = None,
         objective: str | None = None,
-        ctf_mode: bool = False,
     ) -> RunResult:
         """
         Run an Inferno agent workflow.
@@ -1749,7 +1748,6 @@ class InfernoRunner(Runner):
             run_config: Global settings for the entire agent run.
             target: The target URL/hostname (for logging and memory).
             objective: The assessment objective.
-            ctf_mode: Enable CTF mode for aggressive testing.
 
         Returns:
             A run result containing all the inputs, guardrail results and output.
@@ -1792,7 +1790,6 @@ class InfernoRunner(Runner):
             "inferno_runner_start",
             target=target,
             objective=objective,
-            ctf_mode=ctf_mode,
             max_turns=max_turns,
         )
 

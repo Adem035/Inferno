@@ -104,13 +104,13 @@ def sample_scope_config():
 
 @pytest.fixture
 def ctf_scope_config():
-    """CTF mode scope configuration (permissive)."""
+    """Permissive scope configuration for testing/challenges."""
     from inferno.core.scope import ScopeConfig, ScopeAction
 
     return ScopeConfig(
         targets=["http://ctf.htb:8080"],
         include_domains=["ctf.htb", "*.ctf.htb"],
-        ctf_mode=True,
+        permissive_mode=True,
         violation_action=ScopeAction.LOG
     )
 
@@ -257,7 +257,7 @@ def sample_assessment_config():
         "context_type": "web",
         "max_turns": 100,
         "max_tokens": 500000,
-        "ctf_mode": False
+        "permissive_mode": False
     }
 
 # ============================================================================

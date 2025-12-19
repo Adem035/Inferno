@@ -135,7 +135,7 @@ class ScopeConfig:
     allow_same_ip: bool = True
 
     # Special settings
-    ctf_mode: bool = False  # Disable scope checking
+    permissive_mode: bool = False  # Disable scope checking for testing/challenges
     strict_mode: bool = False  # Extra strict checking
 
     @classmethod
@@ -173,7 +173,7 @@ class ScopeConfig:
             "exclude_ports": self.exclude_ports,
             "violation_action": self.violation_action.value,
             "allow_subdomains": self.allow_subdomains,
-            "ctf_mode": self.ctf_mode,
+            "permissive_mode": self.permissive_mode,
         }
 
 
@@ -310,8 +310,8 @@ class ScopeManager:
         """
         self._checked_count += 1
 
-        # CTF mode disables scope checking
-        if self._config.ctf_mode:
+        # Permissive mode disables scope checking
+        if self._config.permissive_mode:
             return True, None
 
         parsed = urlparse(url)
@@ -449,7 +449,7 @@ class ScopeManager:
             "blocked": self._blocked_count,
             "violations": len(self._violations),
             "rules_count": len(self._rules),
-            "ctf_mode": self._config.ctf_mode,
+            "permissive_mode": self._config.permissive_mode,
         }
 
     def get_scope_summary(self) -> str:
@@ -481,7 +481,7 @@ class ScopeManager:
         lines.append("\n## Settings:")
         lines.append(f"  - Violation Action: {self._config.violation_action.value}")
         lines.append(f"  - Allow Subdomains: {self._config.allow_subdomains}")
-        lines.append(f"  - CTF Mode: {self._config.ctf_mode}")
+        lines.append(f"  - Permissive Mode: {self._config.permissive_mode}")
 
         return "\n".join(lines)
 

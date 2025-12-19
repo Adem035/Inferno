@@ -104,7 +104,7 @@ except ImportError:
     STRATEGIC_PLANNING_AVAILABLE = False
 
 # NOTE: Other advanced features removed in rebuild:
-# - DiminishingReturnsTracker, FlagDetector, CTFPayloadBlaster
+# - DiminishingReturnsTracker, FlagDetector
 # - ChainEnumerator, ValidationOrchestrator
 # - ApplicationModel, ParameterRoleAnalyzer (integrated into StrategicPlanner)
 # - MLScoringEngine, QualityGatePipeline
@@ -162,7 +162,7 @@ class ExecutionResult:
     error: str | None = None
     final_message: str | None = None
     continuations: int = 0
-    flags_found: list[str] = field(default_factory=list)  # CTF mode
+    flags_found: list[str] = field(default_factory=list)  # Captured flags
     trace_json_path: str | None = None  # Path to session trace JSON
     trace_html_path: str | None = None  # Path to session trace HTML
     # Assessment Scoring (Performance Assessment Framework)
@@ -209,12 +209,11 @@ class AssessmentConfig:
     permission_mode: str = "default"  # "default", "acceptEdits", "plan", "bypassPermissions"
 
     # Mode options
-    mode: str = "web"  # "web", "api", "network", "ctf", "cloud"
+    mode: str = "web"  # "web", "api", "network", "cloud"
     auto_continue: bool = True  # Continue if objectives not met
     max_continuations: int = 5  # Max times to continue after max_turns
     scope_config: dict[str, Any] | None = None  # Scope configuration
     enable_waf_detection: bool = True  # Auto-detect WAF
-    ctf_mode: bool = False  # CTF mode (more aggressive)
 
     # Advanced features (Vulnetic-inspired improvements)
     enable_branch_tracking: bool = True  # Track decision points for backtracking
@@ -227,7 +226,7 @@ class AssessmentConfig:
     subagent_no_findings_threshold: int = 8  # Spawn exploration subagent if no findings after N turns
 
     # Persona selection
-    persona: str = "thorough"  # "thorough", "ctf", "stealth"
+    persona: str = "thorough"  # "thorough", "aggressive", "stealth"
 
     # ML & AI-enhanced features (ALL ENABLED BY DEFAULT)
     enable_ml_scoring: bool = True  # ML-enhanced vulnerability classification
@@ -240,7 +239,7 @@ class AssessmentConfig:
     diminishing_returns_window: int = 10  # Window size for trend analysis
     diminishing_returns_threshold: float = 0.3  # Success rate decline threshold
 
-    # Parallel initial reconnaissance (CTF optimization)
+    # Parallel initial reconnaissance
     enable_parallel_initial_recon: bool = True  # Auto-spawn parallel recon at start
     parallel_recon_agents: list[str] = field(default_factory=lambda: ["reconnaissance", "scanner"])
 
@@ -272,7 +271,7 @@ class SDKAgentExecutor:
     - Branch tracking for systematic exploration and backtracking
     - Attack chain enumeration for comprehensive exploitation
     - Diminishing returns tracking to avoid wasted effort
-    - CTF-optimized aggressive mode for speed
+    - Aggressive mode for fast exploitation
     - Faster subagent spawning thresholds
     - SystemPromptBuilder with personas
     - Strategic planning for proactive assessment
@@ -308,9 +307,6 @@ class SDKAgentExecutor:
 
         # Branch tracker (kept - unique, useful feature)
         self._branch_tracker: BranchTracker | None = None
-
-        # CTF mode flag (simplified)
-        self._ctf_mode: bool = False
 
         # Guardrails engine for security policy enforcement (kept - security critical)
         self._guardrail_engine: GuardrailEngine | None = None
@@ -788,110 +784,13 @@ swarm(agent_type="exploiter", task="Exploit the {verified_only[0].vuln_type} - e
         from inferno.config.environment import discover_security_tools, setup_operation_context
         from inferno.config.settings import InfernoSettings
 
-        # CTF mode - use aggressive prompt with creative exploitation
-        # NOTE: build_ctf_system_prompt removed in rebuild, using inline CTF prompt
-        if self._ctf_mode:
-            ctf_prompt = f"""# CTF SECURITY ASSESSMENT
-
-## Target
-{config.target}
-
-## Challenge Type
-{config.target_type or "web"}
-
-## Mode
-**CTF MODE ENABLED** - Be aggressive, think creatively!
-
-## The 3-Try Rule (CRITICAL)
-When a payload is BLOCKED, do NOT give up. Try 3 different approaches:
-1. **Try 1**: Standard payload
-2. **Try 2**: Encoded/obfuscated version (URL, double-URL, Unicode, mixed case)
-3. **Try 3**: Different technique (HPP, different content-type, different endpoint)
-**Only after 3 different approaches fail, pivot to a new vector.**
-
-## Bypass Techniques (Use When Blocked)
-- WAF Bypass: URL encode, double encode, mixed case (SeLeCt), comments (SEL/**/ECT), HPP (?id=1&id=payload)
-- Auth Bypass: JWT none algorithm, X-Forwarded-For: 127.0.0.1, path traversal (/admin/../user)
-- Rate Limit Bypass: X-Forwarded-For rotation, mobile API (/api/mobile/), legacy API (/api/v1/)
-
-## Advanced Techniques to Try
-- Race conditions: Simultaneous requests to coupon/vote/balance endpoints
-- SSTI: {{{{7*7}}}}, ${{{{7*7}}}}, <%=7*7%> - escalate to RCE
-- Prototype pollution: {{"__proto__": {{"admin": true}}}}
-- HTTP smuggling: CL.TE, TE.CL when behind CDN/proxy
-- Second-order vulns: XSS in profile -> admin views -> steal admin session
-
-## Business Logic (High Value, No WAF Detection)
-Ask "What If?":
-- What if I do it twice? (coupon, vote, redeem)
-- What if I use negative numbers? (quantity, price, transfer)
-- What if I skip steps? (jump to checkout without payment)
-- What if I'm faster than the server? (race conditions)
-
-## Standard Approach
-1. Use `execute_command` to run: nmap, sqlmap, gobuster, nikto, etc.
-2. Check common paths: robots.txt, .git, .env, backup files
-3. Look for flags: flag{{...}}, HTB{{...}}, CTF{{...}}
-4. Chain vulnerabilities for maximum impact
-5. Check /etc/passwd, environment variables, config files
-
-## SWARM WORKERS - Use Them Aggressively!
-You have access to the `swarm` tool to spawn specialized workers. USE IT OFTEN:
-
-**When to spawn workers:**
-- After initial recon: spawn `scanner` for vulnerability scanning
-- When you find a potential vuln: spawn `analyzer` for deep analysis
-- When stuck: spawn `exploiter` with specific attack focus
-- For validation: spawn `validator` to confirm findings independently
-- For WAF bypass: spawn `waf_bypass` specialist
-
-**Worker types available:**
-- `reconnaissance` - Fast enumeration
-- `scanner` - Vulnerability scanning
-- `exploiter` - Deep exploitation
-- `analyzer` - Analyze specific attack vectors (SSTI, SQLi, etc.)
-- `validator` - Independent finding validation
-- `waf_bypass` - WAF evasion specialist
-- `business_logic` - Logic flaw hunting
-
-**Example swarm calls:**
-```
-swarm(agent_type="analyzer", task="Deep analyze SSTI in /template endpoint. Test Jinja2, Twig, Freemarker payloads.")
-swarm(agent_type="exploiter", task="Exploit SQLi in /api/users?id=. Try boolean and time-based blind.")
-swarm(agent_type="waf_bypass", task="Bypass CloudFlare WAF blocking SQLi on /search")
-```
-
-**IMPORTANT:** Don't do everything yourself! Spawn workers for parallel work.
-
-## Tools Available
-```bash
-nmap -sV -sC {config.target}
-gobuster dir -u http://{config.target} -w /usr/share/wordlists/dirb/common.txt
-sqlmap -u "http://{config.target}/page?id=1" --batch --dbs --tamper=space2comment
-nikto -h {config.target}
-curl, wget, nc, python scripts, etc.
-```
-
-## Remember
-- Standard attacks often fail because targets are protected
-- Creative thinking beats brute force
-- Chain low-severity vulns into high-impact exploits
-
-START NOW - enumerate, bypass protections, and exploit!
-"""
-            return ctf_prompt
-
         # Determine persona
         persona_map = {
             "thorough": AgentPersona.THOROUGH,
-            "ctf": AgentPersona.CTF,
+            "aggressive": AgentPersona.AGGRESSIVE,
             "stealth": AgentPersona.THOROUGH,  # Use THOROUGH as fallback
         }
         persona = persona_map.get(config.persona, AgentPersona.THOROUGH)
-
-        # Override persona for CTF mode
-        if config.ctf_mode or config.mode == "ctf":
-            persona = AgentPersona.CTF
 
         # Create operation context using the helper function
         try:
@@ -944,7 +843,7 @@ START NOW - enumerate, bypass protections, and exploit!
 
         Args:
             target: The target URL/IP
-            mode: Assessment mode (web, api, ctf)
+            mode: Assessment mode (web, api, network, cloud)
 
         Returns:
             Formatted attack intelligence section, or empty string if unavailable
@@ -1226,9 +1125,9 @@ The system automatically monitors progress and can suggest when to try different
         """
         Run parallel initial reconnaissance sub-agents at assessment start.
 
-        This is a CTF optimization that spawns multiple specialized recon
-        agents simultaneously to rapidly gather initial intelligence about
-        the target before the main assessment begins.
+        Spawns multiple specialized recon agents simultaneously to rapidly
+        gather initial intelligence about the target before the main
+        assessment begins.
 
         Args:
             config: Assessment configuration.
@@ -1239,10 +1138,6 @@ The system automatically monitors progress and can suggest when to try different
             Dict of agent_type -> findings summary.
         """
         if not config.enable_parallel_initial_recon:
-            return {}
-
-        if not (self._ctf_mode or config.ctf_mode):
-            # Only in CTF mode by default
             return {}
 
         logger.info(
@@ -1281,7 +1176,7 @@ The system automatically monitors progress and can suggest when to try different
                     result = await swarm_tool.execute(
                         agent_type=agent_type,
                         task=task,
-                        context=f"Target: {config.target}\nObjective: {config.objective}\nMode: CTF - Speed is critical!",
+                        context=f"Target: {config.target}\nObjective: {config.objective}\nMode: Speed is critical - gather intel fast!",
                         max_turns=10,  # Quick recon
                     )
                     if result.success:
@@ -1525,9 +1420,6 @@ The system automatically monitors progress and can suggest when to try different
             config.target_type = detect_context_type(config.target, config.objective)
             logger.info("target_type_auto_detected", target_type=config.target_type)
 
-        # Enable CTF mode if configured
-        self._ctf_mode = config.ctf_mode or config.mode == "ctf"
-
         logger.info(
             "assessment_started",
             operation_id=operation_id,
@@ -1538,7 +1430,6 @@ The system automatically monitors progress and can suggest when to try different
             enable_chain_enumeration=config.enable_chain_enumeration,
             enable_diminishing_returns=config.enable_diminishing_returns,
             enable_strategic_planning=config.enable_strategic_planning,
-            ctf_mode=self._ctf_mode,
             persona=config.persona,
         )
 
@@ -1565,15 +1456,11 @@ The system automatically monitors progress and can suggest when to try different
         # NOTE: Removed in rebuild:
         # - ChainEnumerator (config.enable_chain_enumeration)
         # - DiminishingReturnsTracker (config.enable_diminishing_returns)
-        # - FlagDetector, CTFPayloadBlaster (CTF mode)
         # - ValidationOrchestrator (config.auto_validate_findings)
         # - MLScoringEngine (config.enable_ml_scoring)
         #
         # The new philosophy: Let the LLM use execute_command to run any tool.
         # These features added cognitive overhead without proven value.
-
-        if self._ctf_mode:
-            logger.info("ctf_mode_enabled", note="using simplified approach")
 
         # Log enabled AI features
         logger.info(
@@ -1732,9 +1619,9 @@ The system automatically monitors progress and can suggest when to try different
             system_prompt += "\n\n" + attack_intelligence
             logger.info("attack_intelligence_injected", length=len(attack_intelligence))
 
-        # Run parallel initial reconnaissance in CTF mode (if not already done)
+        # Run parallel initial reconnaissance (if not already done)
         initial_recon_results: dict[str, str] = {}
-        if self._ctf_mode and config.enable_parallel_initial_recon and not strategic_context:
+        if config.enable_parallel_initial_recon and not strategic_context:
             # Only run if we didn't already run it in strategic planning phase
             initial_recon_results = await self._run_parallel_initial_recon(config, artifacts_dir, operation_id)
 
@@ -1912,21 +1799,6 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                             # Only show text output if thinking_only_output is disabled
                             if self._on_message and not thinking_only_output:
                                 self._on_message(block.text)
-
-                            # CTF mode: scan for flags in all text
-                            if self._ctf_mode and self._flag_detector:
-                                found_flags = self._flag_detector.scan_for_flags(
-                                    block.text, source="assistant_message"
-                                )
-                                if found_flags:
-                                    for flag_info in found_flags:
-                                        if flag_info.confidence > 0.7:
-                                            flags_found.append(flag_info.flag)
-                                            logger.info(
-                                                "flag_found_in_message",
-                                                flag=flag_info.flag[:50],
-                                                confidence=flag_info.confidence,
-                                            )
 
                         elif isinstance(block, ThinkingBlock):
                             # Always show thinking blocks when extended thinking is enabled
@@ -2232,22 +2104,6 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                                             details={"tool": tool_name, "output_length": len(output)},
                                         )
 
-                                # CTF mode: scan tool results for flags
-                                if self._ctf_mode and self._flag_detector and output:
-                                    found_flags_in_output = self._flag_detector.scan_for_flags(
-                                        output, source=f"tool_result:{tool_name}"
-                                    )
-                                    if found_flags_in_output:
-                                        for flag_info in found_flags_in_output:
-                                            if flag_info.confidence > 0.7:
-                                                flags_found.append(flag_info.flag)
-                                                logger.info(
-                                                    "flag_found_in_tool_result",
-                                                    tool=tool_name,
-                                                    flag=flag_info.flag[:50],
-                                                    confidence=flag_info.confidence,
-                                                )
-
                                 if self._on_tool_result:
                                     self._on_tool_result(tool_name, output, is_error)
 
@@ -2404,9 +2260,9 @@ Previous attack '{detected_attack}' appears blocked/failed.
                         result_text = str(message.result).lower()
 
                         # Only count as objective met if:
-                        # 1. CTF mode and actual flags captured (high confidence)
+                        # 1. Actual flags captured (high confidence)
                         # 2. Explicit objective completion markers (exact phrases)
-                        ctf_objective_met = len(flags_found) > 0
+                        flags_objective_met = len(flags_found) > 0
 
                         # Require explicit, unambiguous completion statements
                         explicit_completion = (
@@ -2417,7 +2273,7 @@ Previous attack '{detected_attack}' appears blocked/failed.
                             "[objective_met]" in result_text  # Explicit marker
                         )
 
-                        local_objective_met = ctf_objective_met or explicit_completion
+                        local_objective_met = flags_objective_met or explicit_completion
                         findings_summary = message.result
 
                     logger.info(
@@ -2628,11 +2484,6 @@ Previous attack '{detected_attack}' appears blocked/failed.
         if self._diminishing_tracker:
             stats = self._diminishing_tracker.get_all_stats()
             logger.info("diminishing_returns_stats", **stats)
-
-        # Log CTF mode statistics
-        if self._ctf_mode and self._flag_detector:
-            flag_stats = self._flag_detector.get_statistics()
-            logger.info("ctf_flag_detection_stats", **flag_stats)
 
         # Finalize Assessment Scoring
         assessment_score_data = None

@@ -36,7 +36,7 @@ class AgentPersona(str, Enum):
     """Agent persona types for prompt generation."""
 
     THOROUGH = "thorough"  # Comprehensive assessment
-    CTF = "ctf"  # Aggressive, flag-focused
+    AGGRESSIVE = "aggressive"  # Aggressive, fast exploitation
     STEALTH = "stealth"  # Quiet, avoid detection
     BUG_BOUNTY = "bug_bounty"  # Impact-focused
 

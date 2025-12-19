@@ -9,7 +9,7 @@ from inferno.agent.prompts import (
     ObjectiveInfo,
     SystemPromptBuilder,
     TargetInfo,
-    build_ctf_prompt,
+    build_aggressive_prompt,
     build_default_prompt,
 )
 from inferno.agent.sdk_executor import AssessmentConfig, ExecutionResult, SDKAgentExecutor
@@ -52,6 +52,6 @@ __all__ = [
     "ObjectiveInfo",
     "SystemPromptBuilder",
     "TargetInfo",
-    "build_ctf_prompt",
+    "build_aggressive_prompt",
     "build_default_prompt",
 ]

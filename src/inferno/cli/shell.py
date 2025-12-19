@@ -56,11 +56,10 @@ class InfernoShell:
         configure_cli_logging(verbose=False)
 
         # New state
-        self.current_mode: str = "web"  # web, network, ctf, cloud
+        self.current_mode: str = "web"  # web, network, cloud
         self.auto_continue: bool = True
         self.max_turns: int = 500  # High default - let token limit be the real constraint
         self.max_continuations: int = 5
-        self.ctf_mode: bool = False
         self.scope_inclusions: list[str] = []
         self.scope_exclusions: list[str] = []
         self.auto_waf_detect: bool = True  # Auto-detect WAF at start
@@ -78,7 +77,7 @@ class InfernoShell:
             "target": (self.cmd_target, "Set target - usage: target <url>"),
             "objective": (self.cmd_objective, "Set objective - usage: objective <text> or objective --edit"),
             "persona": (self.cmd_persona, "Set persona - usage: persona <name>"),
-            "mode": (self.cmd_mode, "Set assessment mode - usage: mode <web|network|ctf|cloud>"),
+            "mode": (self.cmd_mode, "Set assessment mode - usage: mode <web|network|cloud>"),
             "scope": (self.cmd_scope, "Manage scope - usage: scope [add|remove|show] [url]"),
             "run": (self.cmd_run_coordinated, "Run assessment (parallel workers + all features)"),
             "scan": (self.cmd_scan, "Quick scan - usage: scan <url>"),
@@ -281,14 +280,14 @@ class InfernoShell:
         console.print("  4. [cyan]run[/cyan]                - Start assessment (parallel workers + all features)")
 
         console.print("\n[bold]Configuration:[/bold]")
-        console.print("  [cyan]mode <type>[/cyan]          - Set mode: [yellow]web[/yellow], [yellow]network[/yellow], [yellow]ctf[/yellow], [yellow]cloud[/yellow]")
+        console.print("  [cyan]mode <type>[/cyan]          - Set mode: [yellow]web[/yellow], [yellow]network[/yellow], [yellow]cloud[/yellow]")
         console.print("  [cyan]objective <text>[/cyan]     - Set custom objective (default: comprehensive assessment)")
         console.print("  [cyan]set max_turns <n>[/cyan]    - Turns per segment (default: 100)")
         console.print("  [cyan]set max_cont <n>[/cyan]     - Max continuations (default: 5)")
         console.print("  [cyan]config[/cyan]               - Show all current settings")
 
         console.print("\n[bold green]NEW - Bug Bounty Features:[/bold green]")
-        console.print("  [cyan]profile[/cyan]              - List/load assessment profiles (hackerone, bugcrowd, ctf)")
+        console.print("  [cyan]profile[/cyan]              - List/load assessment profiles (hackerone, bugcrowd)")
         console.print("  [cyan]profile load <name>[/cyan]  - Load a profile (e.g., hackerone-default)")
         console.print("  [cyan]program set <platform> <handle>[/cyan] - Set bug bounty program")
         console.print("  [cyan]export <format>[/cyan]      - Export findings (hackerone, bugcrowd, sarif)")
@@ -309,12 +308,6 @@ class InfernoShell:
         console.print("  target https://example.com")
         console.print("  run")
         console.print()
-        console.print("  [dim]# CTF challenge with custom objective[/dim]")
-        console.print("  mode ctf")
-        console.print("  objective Find the flag hidden in the application")
-        console.print("  target http://ctf.challenge.com")
-        console.print("  run")
-        console.print()
         console.print("  [dim]# Network pentest[/dim]")
         console.print("  mode network")
         console.print("  objective Enumerate services and find exploitable vulnerabilities")
@@ -333,20 +326,12 @@ class InfernoShell:
         console.print("[bold]Step 1:[/bold] Select assessment mode\n")
         console.print("  [cyan]1[/cyan] - [bold]web[/bold]     Web/API application testing")
         console.print("  [cyan]2[/cyan] - [bold]network[/bold] Network penetration testing")
-        console.print("  [cyan]3[/cyan] - [bold]ctf[/bold]     CTF challenge (aggressive)")
-        console.print("  [cyan]4[/cyan] - [bold]cloud[/bold]   Cloud infrastructure testing")
+        console.print("  [cyan]3[/cyan] - [bold]cloud[/bold]   Cloud infrastructure testing")
         console.print()
 
-        mode_choice = Prompt.ask("Select mode", choices=["1", "2", "3", "4", "web", "network", "ctf", "cloud"], default="1")
-        mode_map = {"1": "web", "2": "network", "3": "ctf", "4": "cloud"}
+        mode_choice = Prompt.ask("Select mode", choices=["1", "2", "3", "web", "network", "cloud"], default="1")
+        mode_map = {"1": "web", "2": "network", "3": "cloud"}
         self.current_mode = mode_map.get(mode_choice, mode_choice)
-
-        if self.current_mode == "ctf":
-            self.ctf_mode = True
-            self.auto_continue = True
-            console.print("[yellow]CTF mode enabled - aggressive testing[/yellow]")
-        else:
-            self.ctf_mode = False
 
         console.print(f"[green]Mode: {self.current_mode}[/green]\n")
 
@@ -375,7 +360,6 @@ class InfernoShell:
         default_objectives = {
             "web": "Perform a comprehensive security assessment of the web application",
             "network": "Enumerate services and identify exploitable vulnerabilities",
-            "ctf": "Find the flag and exploit all vulnerabilities",
             "cloud": "Assess cloud infrastructure for misconfigurations and security issues",
         }
         default_obj = default_objectives.get(self.current_mode, default_objectives["web"])
@@ -709,7 +693,7 @@ class InfernoShell:
 
     def cmd_persona(self, args: list[str]) -> None:
         """Set persona."""
-        personas = ["thorough", "aggressive", "stealthy", "educational", "ctf"]
+        personas = ["thorough", "aggressive", "stealthy", "educational"]
 
         if not args:
             console.print(f"Current persona: [cyan]{self.current_persona}[/cyan]")
@@ -727,7 +711,7 @@ class InfernoShell:
 
     def cmd_mode(self, args: list[str]) -> None:
         """Set assessment mode."""
-        modes = ["web", "network", "ctf", "cloud"]
+        modes = ["web", "network", "cloud"]
 
         if not args:
             console.print(f"Current mode: [cyan]{self.current_mode}[/cyan]")
@@ -735,7 +719,6 @@ class InfernoShell:
             console.print("\n[bold]Mode Descriptions:[/bold]")
             console.print("  [cyan]web[/cyan]     - Web/API application testing (OWASP Top 10, API security)")
             console.print("  [cyan]network[/cyan] - Network penetration testing (port scan, service exploits)")
-            console.print("  [cyan]ctf[/cyan]     - CTF challenge solving (aggressive, creative)")
             console.print("  [cyan]cloud[/cyan]   - Cloud infrastructure testing (AWS/Azure/GCP)")
             return
 
@@ -752,13 +735,6 @@ class InfernoShell:
             return
 
         self.current_mode = mode
-        if mode == "ctf":
-            self.ctf_mode = True
-            self.auto_continue = True
-            console.print("[yellow]CTF mode enabled - aggressive testing, scope restrictions relaxed[/yellow]")
-        else:
-            self.ctf_mode = False
-
         console.print(f"Mode set: [cyan]{self.current_mode}[/cyan]")
 
     def cmd_scope(self, args: list[str]) -> None:
@@ -766,7 +742,6 @@ class InfernoShell:
         if not args:
             console.print("[bold]Scope Management[/bold]\n")
             console.print(f"Target: [cyan]{self.current_target or 'not set'}[/cyan]")
-            console.print(f"CTF Mode: [yellow]{self.ctf_mode}[/yellow] (scope relaxed)")
 
             if self.scope_inclusions:
                 console.print("\n[green]Included:[/green]")
@@ -1027,23 +1002,19 @@ class InfernoShell:
                 target=target,
                 objective=self.current_objective,
                 mode=self.current_mode,
-                ctf_mode=self.ctf_mode,
                 enable_branch_tracking=True,
                 max_turns=500,
             )
 
             # Show loaded prompt components
             console.print("\n[bold cyan]📋 Prompt System:[/bold cyan]")
-            if self.ctf_mode:
-                console.print("  [green]✓[/green] CTF Mode Prompt [dim](bypass techniques, aggressive exploitation)[/dim]")
-            else:
-                console.print("  [green]✓[/green] SystemPromptBuilder [dim](dynamic task-specific prompts)[/dim]")
-                console.print("  [green]✓[/green] DynamicPromptGenerator [dim](MITRE ATT&CK mapping, tech-specific payloads)[/dim]")
-            console.print(f"  [green]✓[/green] Context: {self.current_mode} [dim](web/api/network/ctf)[/dim]")
+            console.print("  [green]✓[/green] SystemPromptBuilder [dim](dynamic task-specific prompts)[/dim]")
+            console.print("  [green]✓[/green] DynamicPromptGenerator [dim](MITRE ATT&CK mapping, tech-specific payloads)[/dim]")
+            console.print(f"  [green]✓[/green] Context: {self.current_mode} [dim](web/api/network/cloud)[/dim]")
 
             # Show active intelligence features
             console.print("\n[bold cyan]🧠 Intelligence Features:[/bold cyan]")
-            console.print("  [green]✓[/green] HintExtractor [dim](technology fingerprints, CTF hints)[/dim]")
+            console.print("  [green]✓[/green] HintExtractor [dim](technology fingerprints, hints)[/dim]")
             console.print("  [green]✓[/green] ResponseAnalyzer [dim](WAF detection, bypass suggestions)[/dim]")
             console.print("  [green]✓[/green] DifferentialAnalyzer [dim](blind injection detection)[/dim]")
             console.print("  [green]✓[/green] AttackSelector [dim](prioritized attack vectors)[/dim]")
@@ -1167,7 +1138,6 @@ class InfernoShell:
 
         # Mode settings
         table.add_row("Mode", f"[cyan]{self.current_mode}[/cyan]")
-        table.add_row("CTF Mode", f"[yellow]{self.ctf_mode}[/yellow]" if self.ctf_mode else str(self.ctf_mode))
 
         # Continuation settings
         table.add_row("Max Turns", str(self.max_turns))
@@ -1254,7 +1224,7 @@ class InfernoShell:
             console.print("  target        - Target URL")
             console.print("  objective     - Assessment objective")
             console.print("  persona       - Agent persona")
-            console.print("  mode          - Assessment mode (web/network/ctf/cloud)")
+            console.print("  mode          - Assessment mode (web/network/cloud)")
             console.print("  max_turns     - Maximum turns per segment (default: 100)")
             console.print("  max_cont      - Maximum continuations (default: 5)")
             console.print("  auto_continue - Auto-continue on max_turns (true/false)")
@@ -1396,7 +1366,6 @@ class InfernoShell:
                 # Apply profile settings
                 self.current_mode = profile.mode
                 self.max_turns = profile.max_turns
-                self.ctf_mode = profile.ctf_mode
                 self.current_persona = profile.persona
                 self.auto_continue = profile.auto_continue
                 self.max_continuations = profile.max_continuations
@@ -1422,7 +1391,6 @@ class InfernoShell:
                 description="Custom profile created from current settings",
                 mode=self.current_mode,
                 max_turns=self.max_turns,
-                ctf_mode=self.ctf_mode,
                 persona=self.current_persona,
                 auto_continue=self.auto_continue,
                 max_continuations=self.max_continuations,
@@ -1441,7 +1409,6 @@ class InfernoShell:
                 table.add_row("Mode", self.current_profile.mode)
                 table.add_row("Max Turns", str(self.current_profile.max_turns))
                 table.add_row("Persona", self.current_profile.persona)
-                table.add_row("CTF Mode", str(self.current_profile.ctf_mode))
                 table.add_row("Program Type", self.current_profile.program_type or "None")
                 table.add_row("Rate Limit", f"{self.current_profile.rate_limit_rpm} req/min")
 
@@ -1759,7 +1726,6 @@ class InfernoShell:
         try:
             from inferno.tools.advanced.parallel_recon import (
                 COMMON_SUBDOMAINS,
-                CTF_SUBDOMAINS,
                 ParallelReconEngine,
             )
 
@@ -1785,7 +1751,7 @@ class InfernoShell:
                 elif args[0] == "full" and len(args) > 1:
                     # Full recon
                     domain = args[1]
-                    wordlist = COMMON_SUBDOMAINS + (CTF_SUBDOMAINS if self.ctf_mode else [])
+                    wordlist = COMMON_SUBDOMAINS
                     console.print(f"[cyan]Full recon on {domain} ({len(wordlist)} subdomains + port scan)...[/cyan]")
 
                     results = await engine.full_recon(domain, wordlist, scan_ports=True)
@@ -1801,7 +1767,7 @@ class InfernoShell:
                 else:
                     # Subdomain enumeration
                     domain = args[0]
-                    wordlist = COMMON_SUBDOMAINS + (CTF_SUBDOMAINS if self.ctf_mode else [])
+                    wordlist = COMMON_SUBDOMAINS
                     console.print(f"[cyan]Enumerating subdomains for {domain} ({len(wordlist)} to check)...[/cyan]")
 
                     results = []

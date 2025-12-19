@@ -75,13 +75,13 @@ class TestScopeManager:
         # Other paths are OK
         assert scope.is_in_scope("https://example.com/api/public")[0]
 
-    def test_ctf_mode_bypass(self, ctf_scope_config):
-        """Test that CTF mode allows broader scope."""
+    def test_permissive_mode_bypass(self, ctf_scope_config):
+        """Test that permissive mode allows broader scope."""
         from inferno.core.scope import ScopeManager
 
         scope = ScopeManager(ctf_scope_config)
 
-        # CTF mode should be more permissive
+        # Permissive mode should allow any target
         in_scope, _ = scope.is_in_scope("http://ctf.htb:8080/anything")
         assert in_scope
 

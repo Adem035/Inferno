@@ -59,9 +59,9 @@ def detect_context_type(target: str, objective: str) -> str:
     target_lower = target.lower()
     objective_lower = objective.lower()
 
-    # CTF detection
+    # Flag/CTF-style challenges - treat as aggressive web assessment
     if any(word in objective_lower for word in ["flag", "ctf", "capture", "hackthebox", "htb"]):
-        return "ctf"
+        return "web"  # Use web mode with aggressive persona
 
     # API detection
     if any(word in target_lower for word in ["/api/", "/v1/", "/v2/", "/graphql"]):
@@ -470,25 +470,27 @@ def build_default_prompt(
     return builder.build()
 
 
-def build_ctf_prompt(
+def build_aggressive_prompt(
     target: str,
-    challenge_name: str = "CTF Challenge",
+    challenge_name: str = "Security Challenge",
     operation_context: OperationContext | None = None,
 ) -> str:
     """
-    Build a CTF-optimized system prompt.
+    Build an aggressive system prompt for challenges/CTFs.
+
+    Uses web mode with AGGRESSIVE persona for flag capture scenarios.
 
     Args:
         target: Target URL or challenge endpoint.
-        challenge_name: Name of the CTF challenge.
+        challenge_name: Name of the challenge.
         operation_context: Optional operation context.
 
     Returns:
-        CTF-optimized system prompt.
+        Aggressive system prompt for flag capture.
     """
-    builder = SystemPromptBuilder(AgentPersona.CTF)
+    builder = SystemPromptBuilder(AgentPersona.AGGRESSIVE)
 
-    builder.set_target(target, target_type="ctf")
+    builder.set_target(target)
     builder.set_objective(
         f"Capture the flag in: {challenge_name}",
         success_criteria=[
