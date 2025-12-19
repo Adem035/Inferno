@@ -17,6 +17,13 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 
 logger = structlog.get_logger(__name__)
 
+# Algorithm learning integration for spawn outcome tracking
+try:
+    from inferno.algorithms.integration import get_loop_integration
+    ALGORITHM_LEARNING_AVAILABLE = True
+except ImportError:
+    ALGORITHM_LEARNING_AVAILABLE = False
+
 # Global NVD tool instance
 _nvd_tool_instance = None
 
@@ -680,6 +687,27 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
                 context=context,
                 max_turns=max_turns,
             )
+
+            # Record spawn outcome for algorithm learning
+            if ALGORITHM_LEARNING_AVAILABLE:
+                try:
+                    loop_integration = get_loop_integration()
+                    # Count findings from output (rough heuristic)
+                    findings_count = 0
+                    if result.output:
+                        output_lower = result.output.lower()
+                        if 'finding' in output_lower or 'vulnerability' in output_lower:
+                            findings_count = output_lower.count('finding') + output_lower.count('vulnerability')
+                        if 'flag' in output_lower:
+                            findings_count += output_lower.count('flag{')
+                    loop_integration.record_spawn_outcome(
+                        success=result.success,
+                        findings_count=findings_count,
+                        turns_used=max_turns,  # Approximate
+                    )
+                except Exception as e:
+                    logger.debug("spawn_outcome_recording_failed", error=str(e))
+
             return {
                 "success": result.success,
                 "output": result.output,
@@ -687,6 +715,17 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
                 "metadata": result.metadata,
             }
         except Exception as e:
+            # Record failed spawn for learning
+            if ALGORITHM_LEARNING_AVAILABLE:
+                try:
+                    loop_integration = get_loop_integration()
+                    loop_integration.record_spawn_outcome(
+                        success=False,
+                        findings_count=0,
+                        turns_used=0,
+                    )
+                except Exception:
+                    pass
             return {"success": False, "error": str(e)}
 
     if background:
@@ -724,6 +763,25 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
             max_turns=max_turns,
         )
 
+        # Record spawn outcome for algorithm learning
+        if ALGORITHM_LEARNING_AVAILABLE:
+            try:
+                loop_integration = get_loop_integration()
+                findings_count = 0
+                if result.output:
+                    output_lower = result.output.lower()
+                    if 'finding' in output_lower or 'vulnerability' in output_lower:
+                        findings_count = output_lower.count('finding') + output_lower.count('vulnerability')
+                    if 'flag' in output_lower:
+                        findings_count += output_lower.count('flag{')
+                loop_integration.record_spawn_outcome(
+                    success=result.success,
+                    findings_count=findings_count,
+                    turns_used=max_turns,
+                )
+            except Exception as e:
+                logger.debug("spawn_outcome_recording_failed", error=str(e))
+
         if result.success:
             return {
                 "content": [{
@@ -741,6 +799,17 @@ async def swarm_spawn(args: dict[str, Any]) -> dict[str, Any]:
             }
 
     except Exception as e:
+        # Record failed spawn for learning
+        if ALGORITHM_LEARNING_AVAILABLE:
+            try:
+                loop_integration = get_loop_integration()
+                loop_integration.record_spawn_outcome(
+                    success=False,
+                    findings_count=0,
+                    turns_used=0,
+                )
+            except Exception:
+                pass
         logger.error("swarm_spawn_error", error=str(e))
         return {
             "content": [{

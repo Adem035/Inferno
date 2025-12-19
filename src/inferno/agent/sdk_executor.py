@@ -2252,6 +2252,15 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                                     self._on_tool_result(tool_name, output, is_error)
 
                                 # ============================================================
+                                # HINT EXTRACTION: Populate _detected_technologies and hints
+                                # ============================================================
+                                if self._hint_extractor and output and not is_error:
+                                    try:
+                                        self._extract_intelligence_from_output(output, tool_name)
+                                    except Exception as e:
+                                        logger.debug("hint_extraction_failed", tool=tool_name, error=str(e))
+
+                                # ============================================================
                                 # ATTACK SELECTOR: Track attempt and inject recommendations
                                 # ============================================================
                                 if self._attack_selector:
@@ -2898,6 +2907,128 @@ Continue the assessment now. Start by recalling memories.""")
             logger.debug("temp_files_cleanup_complete", deleted=deleted_count)
         except Exception as e:
             logger.debug("temp_files_cleanup_error", error=str(e))
+
+    def _extract_intelligence_from_output(self, output: str, tool_name: str) -> None:
+        """
+        Extract hints, technologies, and WAF status from tool output.
+
+        Parses the output from HTTP and command tools to populate:
+        - _detected_technologies: Technologies found (PHP, Node.js, etc.)
+        - _detected_hints: Actionable hints for exploitation
+        - _waf_detected: Whether a WAF was detected
+
+        This feeds the AttackSelector with real-time intelligence.
+        """
+        import re
+
+        # Parse hints from structured output (from http.py)
+        if "=== INTELLIGENCE EXTRACTED ===" in output:
+            # Extract technology hints
+            tech_patterns = [
+                r'\[(?:CRITICAL|HIGH|MEDIUM)\] tech_fingerprint: (.+)',
+                r'\[(?:CRITICAL|HIGH)\] server_info: (.+)',
+                r'X-Powered-By: ([^\n]+)',
+                r'Server: ([^\n]+)',
+            ]
+            for pattern in tech_patterns:
+                matches = re.findall(pattern, output, re.IGNORECASE)
+                for match in matches:
+                    # Extract technology name
+                    tech = match.strip()
+                    # Normalize common technology names
+                    if 'php' in tech.lower():
+                        self._detected_technologies.add('PHP')
+                    if 'node' in tech.lower() or 'express' in tech.lower():
+                        self._detected_technologies.add('Node.js')
+                    if 'python' in tech.lower() or 'django' in tech.lower() or 'flask' in tech.lower():
+                        self._detected_technologies.add('Python')
+                    if 'asp.net' in tech.lower() or 'aspnet' in tech.lower():
+                        self._detected_technologies.add('ASP.NET')
+                    if 'java' in tech.lower() or 'tomcat' in tech.lower() or 'spring' in tech.lower():
+                        self._detected_technologies.add('Java')
+                    if 'ruby' in tech.lower() or 'rails' in tech.lower():
+                        self._detected_technologies.add('Ruby')
+                    if 'nginx' in tech.lower():
+                        self._detected_technologies.add('Nginx')
+                    if 'apache' in tech.lower():
+                        self._detected_technologies.add('Apache')
+                    if 'wordpress' in tech.lower():
+                        self._detected_technologies.add('WordPress')
+                    if 'mysql' in tech.lower():
+                        self._detected_technologies.add('MySQL')
+                    if 'postgres' in tech.lower():
+                        self._detected_technologies.add('PostgreSQL')
+                    # Add raw tech as fallback
+                    self._detected_technologies.add(tech)
+
+            # Extract hints with suggested attacks
+            hint_pattern = r'\[(\w+)\] (\w+): (.+?)(?:\n|$)'
+            hint_matches = re.findall(hint_pattern, output)
+            for priority, hint_type, content in hint_matches:
+                self._detected_hints.append({
+                    'priority': priority,
+                    'type': hint_type,
+                    'content': content.strip(),
+                    'source': tool_name,
+                })
+
+        # Detect WAF from block analysis
+        if "=== BLOCK ANALYSIS ===" in output:
+            self._waf_detected = True
+            waf_match = re.search(r'WAF Detected: (.+)', output)
+            if waf_match:
+                waf_type = waf_match.group(1).strip()
+                self._detected_technologies.add(f"WAF:{waf_type}")
+                logger.info("waf_detected_from_output", waf_type=waf_type)
+
+        # Also detect technologies from common tool outputs
+        if tool_name in ('execute_command', 'generic_linux_command'):
+            # nmap output
+            if 'Nmap scan report' in output:
+                if 'http-server-header' in output.lower():
+                    server_match = re.search(r'http-server-header: (.+)', output, re.I)
+                    if server_match:
+                        self._detected_technologies.add(server_match.group(1).strip())
+                if 'http-title' in output.lower():
+                    title_match = re.search(r'http-title: (.+)', output, re.I)
+                    if title_match:
+                        title = title_match.group(1)
+                        if 'wordpress' in title.lower():
+                            self._detected_technologies.add('WordPress')
+
+            # whatweb output
+            if 'WhatWeb' in output or 'http://' in output and '[' in output:
+                if 'PHP' in output:
+                    self._detected_technologies.add('PHP')
+                if 'Apache' in output:
+                    self._detected_technologies.add('Apache')
+                if 'nginx' in output.lower():
+                    self._detected_technologies.add('Nginx')
+
+        # Log if we found something
+        if self._detected_technologies or self._detected_hints:
+            logger.debug(
+                "intelligence_extracted",
+                tool=tool_name,
+                technologies=list(self._detected_technologies),
+                hints_count=len(self._detected_hints),
+                waf_detected=self._waf_detected,
+            )
+
+            # Feed to AttackSelector for real-time prioritization
+            if self._attack_selector and self._detected_hints:
+                for hint in self._detected_hints[-10:]:  # Last 10 hints
+                    try:
+                        # Boost attack priorities based on hints
+                        from inferno.core.hint_extractor import Hint, HintType, HintPriority
+                        hint_obj = Hint(
+                            hint_type=HintType(hint['type']) if hint['type'] in [e.value for e in HintType] else HintType.OTHER,
+                            content=hint['content'],
+                            priority=HintPriority(hint['priority'].lower()) if hint['priority'].lower() in [e.value for e in HintPriority] else HintPriority.MEDIUM,
+                        )
+                        self._attack_selector.boost_attack_priority(hint_obj)
+                    except Exception:
+                        pass  # Skip invalid hints
 
     async def _persist_assessment_score_to_memory(
         self,
