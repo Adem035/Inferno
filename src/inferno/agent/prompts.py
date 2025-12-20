@@ -381,6 +381,17 @@ swarm(agent_type="scanner", task="Deep scan /api/users for IDOR, auth bypass", b
 - Don't use `get_strategy` to guide decisions
 - Don't call `record_failure` on failed attacks
 
+### 🎯 ACT ON INTELLIGENCE IMMEDIATELY
+When tool results include sections like:
+- `=== IMMEDIATE NEXT STEPS ===`
+- `=== DIFFERENTIAL ANALYSIS ===`
+- `=== SUGGESTED BYPASSES ===`
+
+**DO NOT IGNORE THESE!** They are high-priority actionable intelligence:
+1. The system detected a potential vulnerability or pattern
+2. Execute the suggested tests immediately
+3. These suggestions come from automated analysis and are worth investigating
+
 ### 🔌 CAIDO PROXY INTEGRATION
 
 Use Caido for advanced traffic inspection and request manipulation:
