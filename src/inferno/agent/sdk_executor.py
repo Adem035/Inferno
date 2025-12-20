@@ -368,6 +368,7 @@ class SDKAgentExecutor:
         }
 
         # Validation tracking (simplified - no longer using ValidatedFinding class)
+        self._validation_orchestrator = None  # Disabled in rebuild
         self._pending_validations: list[dict] = []
         self._validated_findings: list[dict] = []
 

@@ -457,83 +457,96 @@ When tool results include suggestions like "IMMEDIATE NEXT STEPS" or "Suggested 
                 local_objective_met = False
                 tool_calls_this_turn = 0
 
-                async for message in client.receive_response():
-                    if isinstance(message, AssistantMessage):
-                        turns += 1
-                        tool_calls_this_turn = 0
-                        console.print(f"[magenta]│[/magenta] [dim]Turn {turns}/{config.max_turns}[/dim]")
+                try:
+                    async for message in client.receive_response():
+                        if isinstance(message, AssistantMessage):
+                            turns += 1
+                            tool_calls_this_turn = 0
+                            console.print(f"[magenta]│[/magenta] [dim]Turn {turns}/{config.max_turns}[/dim]")
 
-                        # Log content block types for debugging
-                        block_types = [type(b).__name__ for b in message.content]
-                        logger.debug("subagent_turn", turn=turns, blocks=block_types)
+                            # Log content block types for debugging
+                            block_types = [type(b).__name__ for b in message.content]
+                            logger.debug("subagent_turn", turn=turns, blocks=block_types)
 
-                        for block in message.content:
-                            if isinstance(block, TextBlock):
-                                final_message = block.text
-                                # Show text preview
-                                text_preview = block.text[:100].replace('\n', ' ')
-                                console.print(f"[magenta]│[/magenta] [dim]📝 {text_preview}...[/dim]")
+                            for block in message.content:
+                                if isinstance(block, TextBlock):
+                                    final_message = block.text
+                                    # Show text preview
+                                    text_preview = block.text[:100].replace('\n', ' ')
+                                    console.print(f"[magenta]│[/magenta] [dim]📝 {text_preview}...[/dim]")
 
-                                # Check for findings
-                                text_lower = block.text.lower()
-                                if any(word in text_lower for word in ["vulnerability", "vulnerable", "found", "discovered", "injection", "xss", "sqli", "cors"]):
-                                    findings.append(block.text[:300])
+                                    # Check for findings
+                                    text_lower = block.text.lower()
+                                    if any(word in text_lower for word in ["vulnerability", "vulnerable", "found", "discovered", "injection", "xss", "sqli", "cors"]):
+                                        findings.append(block.text[:300])
 
-                                # Check for explicit completion markers
-                                if any(phrase in text_lower for phrase in [
-                                    "task complete", "task completed", "objective met",
-                                    "successfully completed", "all tests complete",
-                                    "no more tests", "testing complete", "assessment complete"
+                                    # Check for explicit completion markers
+                                    if any(phrase in text_lower for phrase in [
+                                        "task complete", "task completed", "objective met",
+                                        "successfully completed", "all tests complete",
+                                        "no more tests", "testing complete", "assessment complete"
+                                    ]):
+                                        local_objective_met = True
+
+                                elif isinstance(block, ToolUseBlock):
+                                    tool_calls_this_turn += 1
+                                    # Subagent tool calls: » prefix (cyan) to distinguish from main agent ▶
+                                    tool_name = block.name.replace("mcp__inferno__", "").replace("mcp__", "")
+                                    tool_input = getattr(block, 'input', {})
+                                    if isinstance(tool_input, dict) and "command" in tool_input:
+                                        cmd = tool_input.get("command", "")[:60]
+                                        console.print(f"[magenta]│[/magenta] [bold cyan]» {tool_name}[/bold cyan]")
+                                        console.print(f"[magenta]│[/magenta]   [green]{cmd}[/green]")
+                                    else:
+                                        console.print(f"[magenta]│[/magenta] [bold cyan]» {tool_name}[/bold cyan]")
+
+                                elif isinstance(block, ThinkingBlock):
+                                    # Show thinking progress
+                                    if block.thinking:
+                                        preview = block.thinking[:80].replace('\n', ' ')
+                                        console.print(f"[magenta]│[/magenta] [dim italic]💭 {preview}...[/dim italic]")
+
+                            # Warn if no tools used this turn
+                            if tool_calls_this_turn == 0:
+                                console.print("[magenta]│[/magenta] [yellow]⚠ No tool calls this turn[/yellow]")
+
+                        elif isinstance(message, ResultMessage):
+                            # Parse stop reason from subtype
+                            if message.subtype == "success":
+                                local_stop_reason = "success"
+                            elif message.subtype in ("max_turns", "error_max_turns"):
+                                local_stop_reason = "max_turns"
+                            elif message.subtype == "error_max_budget":
+                                local_stop_reason = "max_budget"
+                            elif message.is_error:
+                                local_stop_reason = "error"
+                            else:
+                                local_stop_reason = message.subtype or "unknown"
+
+                            console.print(f"[magenta]│[/magenta] [dim]ResultMessage: {local_stop_reason}[/dim]")
+
+                            # Check if result indicates completion
+                            if not message.is_error:
+                                result_text = str(message.result).lower()
+                                if any(phrase in result_text for phrase in [
+                                    "task complete", "objective met", "successfully completed",
+                                    "all tests complete", "assessment complete"
                                 ]):
                                     local_objective_met = True
 
-                            elif isinstance(block, ToolUseBlock):
-                                tool_calls_this_turn += 1
-                                # Subagent tool calls: » prefix (cyan) to distinguish from main agent ▶
-                                tool_name = block.name.replace("mcp__inferno__", "").replace("mcp__", "")
-                                tool_input = getattr(block, 'input', {})
-                                if isinstance(tool_input, dict) and "command" in tool_input:
-                                    cmd = tool_input.get("command", "")[:60]
-                                    console.print(f"[magenta]│[/magenta] [bold cyan]» {tool_name}[/bold cyan]")
-                                    console.print(f"[magenta]│[/magenta]   [green]{cmd}[/green]")
-                                else:
-                                    console.print(f"[magenta]│[/magenta] [bold cyan]» {tool_name}[/bold cyan]")
+                            break
 
-                            elif isinstance(block, ThinkingBlock):
-                                # Show thinking progress
-                                if block.thinking:
-                                    preview = block.thinking[:80].replace('\n', ' ')
-                                    console.print(f"[magenta]│[/magenta] [dim italic]💭 {preview}...[/dim italic]")
-
-                        # Warn if no tools used this turn
-                        if tool_calls_this_turn == 0:
-                            console.print("[magenta]│[/magenta] [yellow]⚠ No tool calls this turn[/yellow]")
-
-                    elif isinstance(message, ResultMessage):
-                        # Parse stop reason from subtype
-                        if message.subtype == "success":
-                            local_stop_reason = "success"
-                        elif message.subtype in ("max_turns", "error_max_turns"):
-                            local_stop_reason = "max_turns"
-                        elif message.subtype == "error_max_budget":
-                            local_stop_reason = "max_budget"
-                        elif message.is_error:
-                            local_stop_reason = "error"
-                        else:
-                            local_stop_reason = message.subtype or "unknown"
-
-                        console.print(f"[magenta]│[/magenta] [dim]ResultMessage: {local_stop_reason}[/dim]")
-
-                        # Check if result indicates completion
-                        if not message.is_error:
-                            result_text = str(message.result).lower()
-                            if any(phrase in result_text for phrase in [
-                                "task complete", "objective met", "successfully completed",
-                                "all tests complete", "assessment complete"
-                            ]):
-                                local_objective_met = True
-
-                        break
+                except Exception as stream_error:
+                    # Handle SDK ProcessError (SIGTERM, etc.) gracefully
+                    error_str = str(stream_error)
+                    if "exit code -15" in error_str or "ProcessError" in type(stream_error).__name__:
+                        logger.warning("subagent_terminated", error=error_str)
+                        console.print(f"[magenta]│[/magenta] [yellow]⚠ Subagent terminated (signal)[/yellow]")
+                        local_stop_reason = "terminated"
+                    else:
+                        logger.error("subagent_stream_error", error=error_str)
+                        console.print(f"[magenta]│[/magenta] [red]✗ Stream error: {error_str[:50]}[/red]")
+                        local_stop_reason = "error"
 
                 return local_stop_reason, local_objective_met
 
