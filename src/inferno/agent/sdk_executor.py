@@ -813,9 +813,9 @@ swarm(agent_type="exploiter", task="Exploit the {verified_only[0].vuln_type} - e
         if tool_name in manual_tools:
             self._manual_tool_calls += 1
 
-        # Trigger reminder after 5 manual tool calls without swarm
-        # And don't spam (at least 5 turns between reminders)
-        if self._manual_tool_calls >= 5 and (current_turn - self._last_swarm_reminder_turn >= 5):
+        # Trigger reminder after 3 manual tool calls without swarm (aggressive enforcement)
+        # And don't spam (at least 2 turns between reminders)
+        if self._manual_tool_calls >= 3 and (current_turn - self._last_swarm_reminder_turn >= 2):
             self._last_swarm_reminder_turn = current_turn
 
             reminder = f"""
@@ -900,23 +900,23 @@ Session stats: {self._swarm_spawns} workers spawned, {self._manual_tool_calls} m
         if is_error and tool_name in attack_tools:
             self._failed_attacks_not_recorded += 1
 
-        # Check if reminder needed (at least 5 turns between reminders)
-        if current_turn - self._last_algorithm_reminder_turn < 5:
+        # Check if reminder needed (at least 2 turns between reminders - aggressive enforcement)
+        if current_turn - self._last_algorithm_reminder_turn < 2:
             return None
 
         issues = []
 
-        # Check for missing strategy calls
-        if self._tool_calls_since_strategy >= 5:
+        # Check for missing strategy calls (must call every 2 attack tools)
+        if self._tool_calls_since_strategy >= 2:
             issues.append(f"- **{self._tool_calls_since_strategy} tool calls** without calling `get_strategy()`")
 
-        # Check for missing think calls
-        if self._tool_calls_since_think >= 8:
+        # Check for missing think calls (must reason every 3 attack tools)
+        if self._tool_calls_since_think >= 3:
             issues.append(f"- **{self._tool_calls_since_think} tool calls** without using `think()` for reasoning")
 
-        # Check for unrecorded failures
-        if self._failed_attacks_not_recorded >= 3:
-            issues.append(f"- **{self._failed_attacks_not_recorded} failed attacks** not recorded with `record_failure()`")
+        # Check for unrecorded failures (every failure must be recorded)
+        if self._failed_attacks_not_recorded >= 1:
+            issues.append(f"- **{self._failed_attacks_not_recorded} failed attack(s)** not recorded with `record_failure()`")
 
         if not issues:
             return None
@@ -962,6 +962,64 @@ The algorithm LEARNS from your outcomes. Skipping these calls means:
             calls_since_strategy=self._tool_calls_since_strategy,
             calls_since_think=self._tool_calls_since_think,
             unrecorded_failures=self._failed_attacks_not_recorded,
+        )
+        return reminder
+
+    def _inject_per_turn_enforcement(self, current_turn: int) -> str | None:
+        """
+        Continuous enforcement that runs at the START of each turn.
+
+        This ensures the agent is reminded about algorithms/swarm BEFORE making
+        decisions, not just after tool results. Triggers every 3 turns to maintain
+        algorithm discipline throughout the entire run.
+
+        Returns a prompt nudging the agent to follow the workflow.
+        """
+        # Skip first 2 turns to let agent get started
+        if current_turn < 3:
+            return None
+
+        # Trigger every 3 turns for continuous enforcement
+        if current_turn % 3 != 0:
+            return None
+
+        # Build enforcement based on current state
+        issues = []
+
+        # Check swarm usage
+        if self._manual_tool_calls > 0 and self._swarm_spawns == 0:
+            issues.append(f"⚠️ **{self._manual_tool_calls} manual calls** but no swarm workers spawned")
+
+        # Check algorithm usage
+        if self._tool_calls_since_strategy > 0:
+            issues.append(f"⚠️ **{self._tool_calls_since_strategy} calls** since last `get_strategy()`")
+
+        if self._tool_calls_since_think > 1:
+            issues.append(f"⚠️ **{self._tool_calls_since_think} calls** since last `think()`")
+
+        if self._failed_attacks_not_recorded > 0:
+            issues.append(f"⚠️ **{self._failed_attacks_not_recorded} failures** not recorded")
+
+        if not issues:
+            return None
+
+        reminder = f"""
+## 🔄 TURN {current_turn} CHECKPOINT
+
+{chr(10).join(issues)}
+
+### REMEMBER THE WORKFLOW:
+1. **THINK** → `think(thought="...", thought_type="analysis")`
+2. **GET STRATEGY** → `get_strategy(current_phase="...", endpoints_found=N)`
+3. **SPAWN WORKERS** → `swarm(agent_type="scanner", task="...", background=true)`
+4. **RECORD OUTCOMES** → `record_failure()` or `record_success(exploited=true)`
+
+**This checkpoint helps you stay on track. Use the algorithm tools NOW!**
+"""
+        logger.info(
+            "per_turn_enforcement_triggered",
+            turn=current_turn,
+            issues_count=len(issues),
         )
         return reminder
 
@@ -1963,6 +2021,13 @@ IMPORTANT: Start by searching memory for any previous findings on this target us
                 elif isinstance(message, AssistantMessage):
                     # Track turns internally as fallback
                     internal_turn_count += 1
+
+                    # ============================================================
+                    # CONTINUOUS ENFORCEMENT: Inject reminders at turn boundaries
+                    # ============================================================
+                    per_turn_reminder = self._inject_per_turn_enforcement(internal_turn_count)
+                    if per_turn_reminder and self._on_message:
+                        self._on_message(per_turn_reminder)
 
                     for block in message.content:
                         if isinstance(block, TextBlock):
