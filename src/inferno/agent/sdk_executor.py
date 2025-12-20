@@ -62,6 +62,8 @@ from inferno.observability.session_trace import (
     init_session_trace,
 )
 from inferno.prompts import AgentPersona
+from inferno.reporting.generator import ReportGenerator
+from inferno.reporting.models import Finding, Severity
 
 # Algorithm learning integration (wiring dead code into execution)
 try:
@@ -323,18 +325,15 @@ class SDKAgentExecutor:
         # Agent ID for tracking
         self._agent_id: str = f"main_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
 
-        # NOTE: Features removed in rebuild - set to None for compatibility
-        # These checks are still in the codebase but will be no-ops
-        self._chain_enumerator = None
-        self._validation_orchestrator = None
+        # Report Generator
+        self._report_generator = ReportGenerator(output_dir=self._output_dir)
+        self._report = self._report_generator.create_report(
+            target=settings.target if settings else "unknown",
+            objective=settings.objective if settings else "unknown",
+            assessor="Inferno AI",
+        )
+
         self._assessment_scorer: AssessmentScorer | None = None  # Initialized per-run
-        self._ml_engine = None
-        self._diminishing_tracker = None
-        self._flag_detector = None
-        self._payload_blaster = None
-        self._quality_pipeline = None
-        self._app_model = None
-        self._param_analyzer = None
         self._planner = None
         self._coordinator = None
 
@@ -1626,22 +1625,47 @@ The system automatically monitors progress and can suggest when to try different
 
         return "\n".join(sections)
 
-    async def _handle_finding(self, finding: dict[str, Any]) -> None:
+    async def _handle_finding(self, finding_data: dict[str, Any]) -> None:
         """
         Handle a finding and update strategic planning state.
 
         Args:
-            finding: Finding data dictionary.
+            finding_data: Finding data dictionary.
         """
+        # Convert dict to Finding object
+        try:
+            severity_str = finding_data.get("severity", "medium").upper()
+            try:
+                severity = Severity[severity_str]
+            except KeyError:
+                severity = Severity.MEDIUM
+
+            finding = Finding(
+                title=finding_data.get("title", "Unknown Finding"),
+                description=finding_data.get("description", ""),
+                severity=severity,
+                affected_asset=finding_data.get("location", "unknown"),
+                evidence=finding_data.get("evidence", ""),
+                remediation=finding_data.get("remediation", ""),
+                metadata=finding_data,
+            )
+            
+            # Add to report
+            self._report.add_finding(finding)
+            logger.info("finding_added_to_report", title=finding.title, severity=finding.severity.name)
+
+        except Exception as e:
+            logger.error("failed_to_process_finding", error=str(e))
+
         # Update planner progress if available
         if self._planner:
             # Try to match finding to a step
-            step_id = finding.get("related_step_id")
+            step_id = finding_data.get("related_step_id")
             if step_id:
                 self._planner.mark_step_complete(
                     step_id=step_id,
                     success=True,
-                    findings=[finding],
+                    findings=[finding_data],
                 )
                 logger.info("strategic_step_completed", step_id=step_id)
 
@@ -1649,7 +1673,7 @@ The system automatically monitors progress and can suggest when to try different
         if self._coordinator:
             await self._coordinator.handle_finding(
                 agent_id=self._agent_id,
-                finding=finding,
+                finding=finding_data,
             )
 
     async def run(
@@ -2853,6 +2877,35 @@ Previous attack '{detected_attack}' appears blocked/failed.
             # Add trace paths to result for user reference
             result.trace_json_path = str(json_path)
             result.trace_html_path = str(html_path)
+
+        # Generate final reports
+        if self._report_generator:
+            try:
+                # Update report metadata
+                self._report.metadata.completed_at = ended_at
+                self._report.metadata.duration_seconds = duration
+                self._report.metadata.turns_used = turns
+                self._report.metadata.tokens_used = total_tokens
+                
+                # Generate reports
+                self._report_generator.generate(
+                    self._report, 
+                    output_format="json", 
+                    output_path=artifacts_dir / "report.json"
+                )
+                self._report_generator.generate(
+                    self._report, 
+                    output_format="markdown", 
+                    output_path=artifacts_dir / "report.md"
+                )
+                self._report_generator.generate(
+                    self._report, 
+                    output_format="html", 
+                    output_path=artifacts_dir / "report.html"
+                )
+                
+            except Exception as e:
+                logger.error("report_generation_failed", error=str(e))
 
         # Cleanup temp files
         self._cleanup_temp_files()

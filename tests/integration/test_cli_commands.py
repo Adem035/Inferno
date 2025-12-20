@@ -58,7 +58,11 @@ class TestCLIRunCommand:
 
     def test_run_command_help(self):
         """Test: inferno run --help."""
-        result = runner.invoke(app, ["run", "--help"])
+        # Force wide terminal for rich output
+        env = os.environ.copy()
+        env["COLUMNS"] = "120"
+        
+        result = runner.invoke(app, ["run", "--help"], env=env)
 
         assert result.exit_code == 0
         assert "target" in result.stdout.lower()
