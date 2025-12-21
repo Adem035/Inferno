@@ -169,6 +169,8 @@ class ExecutionResult:
     trace_html_path: str | None = None  # Path to session trace HTML
     # Assessment Scoring (Performance Assessment Framework)
     assessment_score: dict[str, Any] | None = None
+    # Report paths for user reference
+    report_paths: dict[str, str] | None = None  # {"markdown": path, "html": path, "json": path}
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -2892,29 +2894,80 @@ Previous attack '{detected_attack}' appears blocked/failed.
         # Generate final reports
         if self._report_generator:
             try:
+                # Collect findings from MCP tools
+                from inferno.agent.mcp_tools import get_recorded_findings, clear_recorded_findings
+                from inferno.reporting.models import Finding, Severity
+
+                recorded = get_recorded_findings()
+                for finding_data in recorded:
+                    try:
+                        severity_str = finding_data.get("severity", "medium").lower()
+                        severity_map = {
+                            "critical": Severity.CRITICAL,
+                            "high": Severity.HIGH,
+                            "medium": Severity.MEDIUM,
+                            "low": Severity.LOW,
+                            "info": Severity.INFO,
+                            "informational": Severity.INFO,
+                        }
+                        severity = severity_map.get(severity_str, Severity.MEDIUM)
+
+                        finding = Finding(
+                            title=finding_data.get("title", "Untitled Finding"),
+                            description=finding_data.get("description", ""),
+                            severity=severity,
+                            affected_asset=finding_data.get("affected_asset", config.target),
+                            evidence=finding_data.get("evidence", ""),
+                            proof_of_concept=finding_data.get("proof_of_concept"),
+                            remediation=finding_data.get("remediation", ""),
+                        )
+                        self._report.add_finding(finding)
+                    except Exception as fe:
+                        logger.warning("finding_add_failed", error=str(fe))
+
+                clear_recorded_findings()  # Clear for next assessment
+
                 # Update report metadata
                 self._report.metadata.completed_at = ended_at
                 self._report.metadata.duration_seconds = duration
                 self._report.metadata.turns_used = turns
                 self._report.metadata.tokens_used = total_tokens
-                
+
                 # Generate reports
+                report_paths = {}
                 self._report_generator.generate(
-                    self._report, 
-                    output_format="json", 
+                    self._report,
+                    output_format="json",
                     output_path=artifacts_dir / "report.json"
                 )
+                report_paths["json"] = str(artifacts_dir / "report.json")
+
                 self._report_generator.generate(
-                    self._report, 
-                    output_format="markdown", 
+                    self._report,
+                    output_format="markdown",
                     output_path=artifacts_dir / "report.md"
                 )
+                report_paths["markdown"] = str(artifacts_dir / "report.md")
+
                 self._report_generator.generate(
-                    self._report, 
-                    output_format="html", 
+                    self._report,
+                    output_format="html",
                     output_path=artifacts_dir / "report.html"
                 )
-                
+                report_paths["html"] = str(artifacts_dir / "report.html")
+
+                # Log report locations for user
+                logger.info(
+                    "reports_generated",
+                    findings_count=len(recorded),
+                    markdown=report_paths["markdown"],
+                    html=report_paths["html"],
+                    json=report_paths["json"],
+                )
+
+                # Add to result for CLI display
+                result.report_paths = report_paths
+
             except Exception as e:
                 logger.error("report_generation_failed", error=str(e))
 

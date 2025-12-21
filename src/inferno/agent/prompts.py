@@ -336,8 +336,18 @@ After EVERY attack attempt:
 # On failure:
 record_failure(endpoint="/login", attack_type="sqli", reason="waf_blocked")
 
-# On success:
-record_success(endpoint="/search", attack_type="sqli", severity="high", exploited=true)
+# On success - include POC for the report!
+record_success(
+    endpoint="/search",
+    attack_type="sqli",
+    severity="high",
+    exploited=true,
+    title="SQL Injection in Search",
+    description="The search parameter is vulnerable to SQL injection allowing database extraction",
+    evidence="Error: MySQL syntax error near '' at line 1",
+    proof_of_concept="curl 'https://target.com/search?q=1' OR 1=1--'",
+    remediation="Use parameterized queries"
+)
 ```
 
 The algorithm LEARNS from these. Skipping them breaks the learning loop.
@@ -611,8 +621,18 @@ get_strategy(current_phase="scanning", endpoints_found=5, vulns_found=2)
 
 # STEP 2: After EVERY attempt, record outcome:
 record_failure(endpoint="/login", attack_type="sqli", reason="waf_blocked")
-# OR
-record_success(endpoint="/api", attack_type="sqli", severity="high", exploited=true)
+# OR - include full details for report!
+record_success(
+    endpoint="/api",
+    attack_type="sqli",
+    severity="high",
+    exploited=true,
+    title="SQL Injection in API",
+    description="The API endpoint is vulnerable to SQL injection",
+    evidence="Database dump retrieved: admin:password123",
+    proof_of_concept="sqlmap -u 'https://target.com/api?id=1' --dump",
+    remediation="Use parameterized queries and input validation"
+)
 ```
 
 **NEVER skip recording outcomes - the algorithm learns from them!**

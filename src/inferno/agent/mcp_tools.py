@@ -997,37 +997,107 @@ async def record_failure(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# Global findings store for report generation
+_recorded_findings: list[dict[str, Any]] = []
+
+
+def get_recorded_findings() -> list[dict[str, Any]]:
+    """Get all recorded findings for report generation."""
+    return _recorded_findings.copy()
+
+
+def clear_recorded_findings() -> None:
+    """Clear recorded findings (call at start of new assessment)."""
+    _recorded_findings.clear()
+
+
 @tool(
     "record_success",
-    "Record a SUCCESSFUL attack to reinforce learning! "
+    "Record a SUCCESSFUL finding with full details for the report! "
     "CRITICAL: Call this when a vulnerability is CONFIRMED or EXPLOITED. "
-    "This updates Q-learning weights to favor successful techniques. "
+    "Include description, evidence, and proof_of_concept for a complete report. "
     "Set exploited=true for FULL POINTS, otherwise you get 20% PENALTY!",
     {
-        "endpoint": str,  # The vulnerable endpoint
-        "attack_type": str,  # sqli, xss, ssti, lfi, rfi, ssrf, auth_bypass, rce, xxe, other
+        "endpoint": str,  # The vulnerable endpoint/asset
+        "attack_type": str,  # sqli, xss, ssti, lfi, rfi, ssrf, auth_bypass, rce, xxe, idor, csrf, other
         "severity": str,  # critical, high, medium, low, info
         "exploited": bool,  # TRUE = full points, FALSE = 20% penalty!
+        "title": str,  # Finding title (e.g., "SQL Injection in /api/users")
+        "description": str,  # Detailed description of the vulnerability
+        "evidence": str,  # Evidence proving the vulnerability (response snippets, etc.)
+        "proof_of_concept": str,  # POC script/commands to reproduce (curl, python, etc.)
+        "remediation": str,  # How to fix the vulnerability
     }
 )
 async def record_success(args: dict[str, Any]) -> dict[str, Any]:
-    """Record a successful attack to reinforce learning."""
+    """Record a successful attack with full details for report generation."""
     from inferno.tools.strategy import RecordSuccessTool
+    from inferno.core.assessment_scoring import score_from_finding
 
+    endpoint = args.get("endpoint", "")
+    attack_type = args.get("attack_type", "other")
+    severity = args.get("severity", "medium")
+    exploited = args.get("exploited", False)
+    title = args.get("title", f"{attack_type.upper()} in {endpoint}")
+    description = args.get("description", f"A {attack_type} vulnerability was found in {endpoint}")
+    evidence = args.get("evidence", "See proof of concept")
+    poc = args.get("proof_of_concept", "")
+    remediation = args.get("remediation", f"Fix the {attack_type} vulnerability by implementing proper input validation and output encoding.")
+
+    # Record in Q-learning
     tool_instance = RecordSuccessTool()
     result = await tool_instance.execute(
-        endpoint=args.get("endpoint", ""),
-        attack_type=args.get("attack_type", "other"),
-        severity=args.get("severity", "medium"),
-        exploited=args.get("exploited", False),
+        endpoint=endpoint,
+        attack_type=attack_type,
+        severity=severity,
+        exploited=exploited,
     )
 
-    # Add explicit scoring feedback
-    exploited = args.get("exploited", False)
+    # Calculate score
+    vuln_score = score_from_finding(
+        vuln_type=attack_type,
+        severity=severity,
+        exploited=exploited,
+        confidence=90 if exploited else 75,
+    )
+
+    # Store finding for report
+    finding_data = {
+        "title": title,
+        "description": description,
+        "severity": severity,
+        "affected_asset": endpoint,
+        "evidence": evidence,
+        "proof_of_concept": poc,
+        "remediation": remediation,
+        "vuln_type": attack_type,
+        "exploited": exploited,
+        "score": vuln_score.total_score,
+        "technical_complexity": vuln_score.technical_complexity.score,
+        "business_impact": vuln_score.business_impact_weight,
+    }
+    _recorded_findings.append(finding_data)
+
+    # Build response with scoring
+    status = "EXPLOITED ✓" if exploited else "VERIFIED (20% penalty)"
+    score_info = f"Score: {vuln_score.total_score:.1f} (TC={vuln_score.technical_complexity.score:.1f} + W={vuln_score.business_impact_weight})"
+
+    result_text = f"""## Finding Recorded: {title}
+
+**Status**: {status}
+**Severity**: {severity.upper()}
+**{score_info}**
+
+{result.output}
+"""
+
     if not exploited:
-        result_text = result.output + "\n\n⚠️ WARNING: VERIFIED but NOT EXPLOITED = 20% PENALTY!\nSpawn an 'exploiter' worker to get FULL POINTS!"
+        result_text += "\n⚠️ WARNING: VERIFIED but NOT EXPLOITED = 20% PENALTY!\nSpawn an 'exploiter' worker to get FULL POINTS!"
     else:
-        result_text = result.output + "\n\n✓ EXPLOITED = FULL POINTS! Well done."
+        result_text += "\n✓ EXPLOITED = FULL POINTS! Finding added to report with POC."
+
+    if poc:
+        result_text += f"\n\n**POC saved to report:**\n```\n{poc[:200]}{'...' if len(poc) > 200 else ''}\n```"
 
     return {
         "content": [{"type": "text", "text": result_text}]
